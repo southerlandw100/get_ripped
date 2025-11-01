@@ -1,11 +1,9 @@
 package com.example.get_ripped.data.repo
 
 import com.example.get_ripped.data.model.Workout
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.*
 
 class FakeWorkoutRepository : WorkoutRepository {
-
     private val _workouts = MutableStateFlow(
         listOf(
             Workout(1, "Full Body A", "10/29", "Felt good today"),
@@ -14,13 +12,13 @@ class FakeWorkoutRepository : WorkoutRepository {
             Workout(4, "Full Body B", "10/23")
         )
     )
-
     override val workouts: Flow<List<Workout>> = _workouts
 
     override suspend fun addWorkout(name: String) {
-        val nextID = (_workouts.value.maxOfOrNull { it.id } ?: 0) + 1
-        _workouts.value = listOf(
-            Workout(nextID, name, "Today")
-        ) + _workouts.value
+        val nextId = (_workouts.value.maxOfOrNull { it.id } ?: 0) + 1
+        _workouts.value = listOf(Workout(nextId, name, "Today")) + _workouts.value
     }
+
+    override fun workoutById(id: Long): Flow<Workout?> =
+        _workouts.map { list -> list.find { it.id == id } }
 }

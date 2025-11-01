@@ -6,4 +6,6 @@ import kotlinx.coroutines.flow.Flow
 interface WorkoutRepository {
     val workouts: Flow<List<Workout>>
     suspend fun addWorkout(name: String)
+
+    fun workoutById(id: Long): Flow<Workout?>
 }
