@@ -4,23 +4,47 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.layout.Arrangement
 import com.example.get_ripped.data.model.Exercise
 import com.example.get_ripped.data.repo.WorkoutRepository
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkoutDetailScreen(
     workoutId: Long,
     repo: WorkoutRepository,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onExerciseClick: (Long) -> Unit
 ) {
     val workout by repo.workoutById(workoutId).collectAsState(initial = null)
     val exercises by repo.exercisesForWorkout(workoutId).collectAsState(initial = emptyList())
 
+    val scope = rememberCoroutineScope()
     var showDialog by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
 
@@ -28,9 +52,7 @@ fun WorkoutDetailScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text(workout?.name ?: "Workout") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Text("←") }
-                }
+                navigationIcon = { IconButton(onClick = onBack) { Text("←") } }
             )
         },
         floatingActionButton = {
@@ -43,10 +65,23 @@ fun WorkoutDetailScreen(
                 .padding(16.dp)
                 .fillMaxSize()
         ) {
-            // all detail UI lives here
+            if (workout == null) {
+                Text("Workout not found")
+            } else {
+                Text(
+                    text = "Last done: ${workout!!.lastDate}",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Spacer(Modifier.height(12.dp))
+
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(exercises) { ex ->
+                        ExerciseCard(ex) { onExerciseClick(ex.id) }
+                    }
+                }
+            }
         }
     }
-
 
     if (showDialog) {
         AlertDialog(
@@ -55,14 +90,10 @@ fun WorkoutDetailScreen(
                 TextButton(onClick = {
                     val name = newName.trim()
                     if (name.isNotEmpty()) {
-                        // add exercise to this workout
-                        // (since repo is not a VM here, we can't launch; FakeRepo is sync-safe for demo)
-                        // In Room version we'll call a VM method.
-                        // For now we can use LaunchedEffect or rememberCoroutineScope:
-                        // Keep it simple:
+                        scope.launch { repo.addExercise(workoutId, name) }
                     }
-                    showDialog = false
                     newName = ""
+                    showDialog = false
                 }) { Text("Create") }
             },
             dismissButton = { TextButton(onClick = { showDialog = false }) { Text("Cancel") } },
@@ -71,7 +102,8 @@ fun WorkoutDetailScreen(
                 OutlinedTextField(
                     value = newName,
                     onValueChange = { newName = it },
-                    label = { Text("Name") }
+                    label = { Text("Name") },
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         )
@@ -79,7 +111,10 @@ fun WorkoutDetailScreen(
 }
 
 @Composable
-private fun ExerciseCard(ex: Exercise, onClick: () -> Unit) {
+private fun ExerciseCard(
+    ex: Exercise,
+    onClick: () -> Unit
+) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -91,11 +126,15 @@ private fun ExerciseCard(ex: Exercise, onClick: () -> Unit) {
         Column(Modifier.padding(16.dp)) {
             Text(ex.name, style = MaterialTheme.typography.titleMedium)
             Text("Last: ${ex.lastDate}", style = MaterialTheme.typography.bodySmall)
-            // quick summary: last set if available
             ex.sets.lastOrNull()?.let { last ->
-                Text("Last set: ${last.reps} reps @ ${last.weight} lbs", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "Last set: ${last.reps} reps @ ${last.weight} lbs",
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
-            ex.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1) }
+            ex.note?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+            }
         }
     }
 }

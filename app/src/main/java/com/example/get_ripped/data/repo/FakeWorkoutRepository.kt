@@ -60,4 +60,44 @@ class FakeWorkoutRepository : WorkoutRepository {
         ) + current
         _exercisesByWorkout.value = _exercisesByWorkout.value + (workoutId to updated)
     }
+
+    override fun exerciseById(workoutId: Long, exerciseId: Long): Flow<Exercise?> =
+        _exercisesByWorkout.map { map -> map[workoutId]?.find { it.id == exerciseId } }
+
+    override suspend fun addSet(workoutId: Long, exerciseId: Long, reps: Int, weight: Int) {
+        val list = _exercisesByWorkout.value[workoutId].orEmpty()
+        val updated = list.map { ex ->
+            if (ex.id == exerciseId) ex.copy(sets = ex.sets + SetEntry(reps, weight)) else ex
+        }
+        _exercisesByWorkout.value = _exercisesByWorkout.value + (workoutId to updated)
+    }
+
+    override suspend fun updateSet(workoutId: Long, exerciseId: Long, index: Int, reps: Int, weight: Int) {
+        val list = _exercisesByWorkout.value[workoutId].orEmpty()
+        val updated = list.map { ex ->
+            if (ex.id == exerciseId && index in ex.sets.indices) {
+                val newSets = ex.sets.toMutableList().apply { this[index] = SetEntry(reps, weight) }
+                ex.copy(sets = newSets)
+            } else ex
+        }
+        _exercisesByWorkout.value = _exercisesByWorkout.value + (workoutId to updated)
+    }
+
+    override suspend fun removeSet(workoutId: Long, exerciseId: Long, index: Int) {
+        val list = _exercisesByWorkout.value[workoutId].orEmpty()
+        val updated = list.map { ex ->
+            if (ex.id == exerciseId && index in ex.sets.indices) {
+                val newSets = ex.sets.toMutableList().apply { removeAt(index) }
+                ex.copy(sets = newSets)
+            } else ex
+        }
+        _exercisesByWorkout.value = _exercisesByWorkout.value + (workoutId to updated)
+    }
+
+    override suspend fun updateExerciseNote(workoutId: Long, exerciseId: Long, note: String) {
+        val list = _exercisesByWorkout.value[workoutId].orEmpty()
+        val updated = list.map { ex -> if (ex.id == exerciseId) ex.copy(note = note) else ex }
+        _exercisesByWorkout.value = _exercisesByWorkout.value + (workoutId to updated)
+    }
+
 }
