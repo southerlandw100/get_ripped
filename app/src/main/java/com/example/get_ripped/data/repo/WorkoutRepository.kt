@@ -12,7 +12,7 @@ interface WorkoutRepository {
 
     fun exercisesForWorkout(workoutId: Long): Flow<List<Exercise>>
     suspend fun addExercise(workoutId: Long, name: String)
-    fun exerciseById(workoutId: Long, exerciseId: Long): Flow<Exercise>
+    fun exerciseById(workoutId: Long, exerciseId: Long): Flow<Exercise?>
     suspend fun addSet(workoutId: Long, exerciseId: Long, reps: Int, weight: Int)
     suspend fun updateSet(workoutId: Long, exerciseId: Long, index: Int, reps: Int, weight: Int)
     suspend fun removeSet(workoutId: Long, exerciseId: Long, index: Int)
