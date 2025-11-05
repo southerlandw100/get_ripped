@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import com.example.get_ripped.data.model.Exercise
 import com.example.get_ripped.data.model.SetEntry
 import com.example.get_ripped.data.repo.WorkoutRepository
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -22,9 +23,17 @@ fun ExerciseDetailScreen(
     repo: WorkoutRepository,
     onBack: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
-    val exercise by repo.exerciseById(workoutId, exerciseId).collectAsState(initial = null)
-    var noteDraft by remember(exercise?.note) { mutableStateOf(exercise?.note.orEmpty()) }
+    val vm: ExerciseDetailViewModel = viewModel(
+        factory = ExerciseDetailViewModelFactory(repo, workoutId, exerciseId)
+    )
+    val exercise by vm.exercise.collectAsState()
+    var noteDraft by remember { mutableStateOf("") }
+
+// When exercise loads/changes, update local note copy for UI editing
+    LaunchedEffect(exercise?.note) {
+        noteDraft = exercise?.note.orEmpty()
+    }
+
 
     Scaffold(
         topBar = {
@@ -35,7 +44,7 @@ fun ExerciseDetailScreen(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = {
-                scope.launch { repo.addSet(workoutId, exerciseId, reps = 8, weight = 0) }
+                vm.addSet()
             }) { Text("+") }
         }
     ) { padding ->
@@ -53,7 +62,7 @@ fun ExerciseDetailScreen(
                 value = noteDraft,
                 onValueChange = {
                     noteDraft = it
-                    scope.launch { repo.updateExerciseNote(workoutId, exerciseId, it) }
+                    vm.updateNote(it)
                 },
                 label = { Text("Note (optional)") },
                 modifier = Modifier.fillMaxWidth()
@@ -66,10 +75,10 @@ fun ExerciseDetailScreen(
                     SetRow(
                         set = set,
                         onChange = { newReps, newWeight ->
-                            scope.launch { repo.updateSet(workoutId, exerciseId, index, newReps, newWeight) }
+                            vm.updateSet(index, newReps, newWeight)
                         },
                         onRemove = {
-                            scope.launch { repo.removeSet(workoutId, exerciseId, index) }
+                            vm.removeSet(index)
                         }
                     )
                 }

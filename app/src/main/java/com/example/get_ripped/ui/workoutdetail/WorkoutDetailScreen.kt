@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.layout.Arrangement
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.get_ripped.data.model.Exercise
 import com.example.get_ripped.data.repo.WorkoutRepository
 import kotlinx.coroutines.launch
@@ -41,8 +42,11 @@ fun WorkoutDetailScreen(
     onBack: () -> Unit,
     onExerciseClick: (Long) -> Unit
 ) {
-    val workout by repo.workoutById(workoutId).collectAsState(initial = null)
-    val exercises by repo.exercisesForWorkout(workoutId).collectAsState(initial = emptyList())
+    val vm: WorkoutDetailViewModel = viewModel(
+        factory = WorkoutDetailViewModelFactory(repo, workoutId)
+    )
+    val workout by vm.workout.collectAsState()
+    val exercises by vm.exercises.collectAsState()
 
     val scope = rememberCoroutineScope()
     var showDialog by remember { mutableStateOf(false) }
@@ -90,7 +94,7 @@ fun WorkoutDetailScreen(
                 TextButton(onClick = {
                     val name = newName.trim()
                     if (name.isNotEmpty()) {
-                        scope.launch { repo.addExercise(workoutId, name) }
+                        vm.addExercise(name)
                     }
                     newName = ""
                     showDialog = false
