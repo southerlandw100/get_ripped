@@ -17,4 +17,5 @@ interface WorkoutRepository {
     suspend fun updateSet(workoutId: Long, exerciseId: Long, index: Int, reps: Int, weight: Int)
     suspend fun removeSet(workoutId: Long, exerciseId: Long, index: Int)
     suspend fun updateExerciseNote(workoutId: Long, exerciseId: Long, note: String)
+    suspend fun repeatLastIfEmpty(workoutId: Long): Boolean
 }

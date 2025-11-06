@@ -4,7 +4,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [WorkoutEntity::class, ExerciseEntity::class, SetEntity::class],
-    version = 1,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDb : RoomDatabase() {
