@@ -6,6 +6,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
 
 class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
     override val workouts: Flow<List<Workout>> =
@@ -33,8 +37,41 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
         }
 
     override suspend fun addExercise(workoutId: Long, name: String) {
-        dao.insertExercise(ExerciseEntity(workoutId = workoutId, name = name, lastDate = "Today", note = null, position = dao.maxPositionForWorkout(workoutId) + 1))
+        // 1) Find the most recent exercise with this name (any workout)
+        val previous = dao.lastExerciseByName(name)
+
+        // 2) Decide what lastDate to start with:
+        //    - if we’ve done this exercise before, keep that lastDate
+        //    - otherwise, blank until the user actually trains (markWorkoutActive)
+        val initialLastDate = previous?.lastDate ?: ""
+
+        // 3) Insert the new exercise in this workout at the next position
+        val nextPos = dao.maxPositionForWorkout(workoutId) + 1
+        val newExerciseId = dao.insertExercise(
+            ExerciseEntity(
+                workoutId = workoutId,
+                name = name,
+                lastDate = initialLastDate,
+                note = previous?.note,   // you can choose null if you don’t want note copied
+                position = nextPos
+            )
+        )
+
+        // 4) If we had a previous instance, copy its sets into the new one
+        if (previous != null) {
+            val prevSets = dao.setsForExercise(previous.id).first()
+            prevSets.forEach { set ->
+                dao.insertSet(
+                    SetEntity(
+                        exerciseId = newExerciseId,
+                        reps = set.reps,
+                        weight = set.weight
+                    )
+                )
+            }
+        }
     }
+
 
     override fun exerciseById(workoutId: Long, exerciseId: Long): Flow<Exercise?> =
         combine(
@@ -53,7 +90,7 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
             }
         }
 
-    override suspend fun addSet(workoutId: Long, exerciseId: Long, reps: Int, weight: Int) {
+    override suspend fun addSet(workoutId: Long, exerciseId: Long, reps: Int, weight: Float) {
         dao.insertSet(SetEntity(exerciseId = exerciseId, reps = reps, weight = weight))
     }
 
@@ -62,7 +99,7 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
         exerciseId: Long,
         index: Int,
         reps: Int,
-        weight: Int
+        weight: Float
     ) {
         // Fetch current sets, update the one at `index`
         val current: List<SetEntity> = dao.setsForExercise(exerciseId).first()
@@ -103,7 +140,7 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
                 ExerciseEntity(
                     workoutId = workoutId,
                     name = prevEx.name,
-                    lastDate = "Today",   // we'll eventually compute this from timestamp history
+                    lastDate = prevEx.lastDate,   // we'll eventually compute this from timestamp history
                     note = prevEx.note,   // carry note (user can edit)
                     position = posBase++
                 )
@@ -128,4 +165,17 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
 
         return true
     }
+
+    override suspend fun markWorkoutActive(workoutId: Long) {
+        val now = System.currentTimeMillis()
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val dateString = formatter.format(Date(now))
+
+        dao.touchWorkout(workoutId, now, dateString)
+        dao.touchExercisesForWorkout(workoutId, dateString)
+    }
+
+    override suspend fun allExerciseNames(): List<String> =
+        dao.allExerciseNames()
+
 }

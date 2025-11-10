@@ -30,6 +30,15 @@ interface WorkoutDao {
     """)
     suspend fun lastWorkoutByNameBefore(name: String, beforeMillis: Long): WorkoutEntity?
 
+    // Update workout timestamp & lastDate
+    @Query("UPDATE workouts SET timestamp = :nowMillis, lastDate = :lastDate WHERE id = :workoutId")
+    suspend fun touchWorkout(workoutId: Long, nowMillis: Long, lastDate: String)
+
+    // Update lastDate for all exercises in a workout
+    @Query("UPDATE exercises SET lastDate = :lastDate WHERE workoutId = :workoutId")
+    suspend fun touchExercisesForWorkout(workoutId: Long, lastDate: String)
+
+
     // -------- Exercises --------
 
     // NOTE: requires ExerciseEntity to have `position: Int`
@@ -53,15 +62,20 @@ interface WorkoutDao {
 
     // Find the most recent occurrence of an exercise name across ALL workouts,
     // ordered by the workout's timestamp (newest first).
+    // Most recent exercise (any workout) with this name
     @Query("""
-        SELECT e.*
-        FROM exercises e
-        INNER JOIN workouts w ON w.id = e.workoutId
-        WHERE e.name = :name
-        ORDER BY w.timestamp DESC, e.id DESC
+        SELECT * FROM exercises
+        WHERE name = :name
+        ORDER BY id DESC
         LIMIT 1
     """)
     suspend fun lastExerciseByName(name: String): ExerciseEntity?
+
+
+    // Distinct exercise names across all workouts, sorted alphabetically
+    @Query("SELECT DISTINCT name FROM exercises ORDER BY name COLLATE NOCASE")
+    suspend fun allExerciseNames(): List<String>
+
 
     // -------- Sets --------
 

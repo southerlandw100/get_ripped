@@ -22,12 +22,14 @@ class ExerciseDetailViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     // Actions
-    fun addSet(defaultReps: Int = 8, defaultWeight: Int = 0) = viewModelScope.launch {
-        repo.addSet(workoutId, exerciseId, defaultReps, defaultWeight)
+    fun addSet() = viewModelScope.launch {
+        repo.addSet(workoutId, exerciseId, reps = 0, weight = 0f)
+        repo.markWorkoutActive(workoutId)
     }
 
-    fun updateSet(index: Int, reps: Int, weight: Int) = viewModelScope.launch {
+    fun updateSet(index: Int, reps: Int, weight: Float) = viewModelScope.launch {
         repo.updateSet(workoutId, exerciseId, index, reps, weight)
+        repo.markWorkoutActive(workoutId)
     }
 
     fun removeSet(index: Int) = viewModelScope.launch {

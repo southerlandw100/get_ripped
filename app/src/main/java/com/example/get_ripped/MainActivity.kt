@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.room.Room
+import androidx.compose.material3.Text
 import com.example.get_ripped.data.local.AppDb
 import com.example.get_ripped.data.repo.RoomWorkoutRepository
 import com.example.get_ripped.ui.home.HomeViewModel
@@ -14,6 +15,8 @@ import com.example.get_ripped.ui.theme.Get_rippedTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        setContent{ Text("HELLO FROM GET RIPPED!") }
         enableEdgeToEdge()
 
         // Build Room DB + Repo

@@ -29,6 +29,12 @@ class WorkoutDetailViewModel(
     fun addExercise(name: String) = viewModelScope.launch {
         repo.addExercise(workoutId, name)
     }
+
+    fun prefillIfEmpty(workoutId: Long) {
+        viewModelScope.launch {
+            repo.repeatLastIfEmpty(workoutId)
+        }
+    }
 }
 
 /** Simple factory so you can pass repo + workoutId without DI */

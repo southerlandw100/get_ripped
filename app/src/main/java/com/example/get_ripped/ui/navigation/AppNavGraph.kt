@@ -49,7 +49,7 @@ fun AppNavGraph(
                 workoutId = workoutId,
                 repo = repo,
                 onBack = { nav.popBackStack() },
-                onExerciseClick = { exerciseId ->
+                onExerciseClick = { wId, exerciseId ->
                     nav.navigate("exercise/$workoutId/$exerciseId")
                 }
             )
