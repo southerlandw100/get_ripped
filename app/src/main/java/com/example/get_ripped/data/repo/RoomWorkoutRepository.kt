@@ -10,20 +10,26 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-
 class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
+
     override val workouts: Flow<List<Workout>> =
         dao.workouts().map { list -> list.map { it.toDomain() } }
 
     override suspend fun addWorkout(name: String) {
-        dao.insertWorkout(WorkoutEntity(name = name, timestamp = System.currentTimeMillis(), lastDate = "Today", note = null))
+        dao.insertWorkout(
+            WorkoutEntity(
+                name = name,
+                timestamp = System.currentTimeMillis(),
+                lastDate = "Today",
+                note = null
+            )
+        )
     }
 
     override fun workoutById(id: Long): Flow<Workout?> =
         dao.workoutById(id).map { it?.toDomain() }
 
     override fun exercisesForWorkout(workoutId: Long): Flow<List<Exercise>> =
-        // exercise list for the workout (no sets here).
         dao.exercisesForWorkout(workoutId).map { entities ->
             entities.map { e ->
                 Exercise(
@@ -31,33 +37,30 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
                     name = e.name,
                     lastDate = e.lastDate,
                     note = e.note,
-                    sets = emptyList() // Sets are fetched in exerciseById
+                    sets = emptyList() // sets loaded in exerciseById
                 )
             }
         }
 
     override suspend fun addExercise(workoutId: Long, name: String) {
-        // 1) Find the most recent exercise with this name (any workout)
+        // Most recent exercise with this name (any workout)
         val previous = dao.lastExerciseByName(name)
 
-        // 2) Decide what lastDate to start with:
-        //    - if we’ve done this exercise before, keep that lastDate
-        //    - otherwise, blank until the user actually trains (markWorkoutActive)
         val initialLastDate = previous?.lastDate ?: ""
 
-        // 3) Insert the new exercise in this workout at the next position
+        // Insert at end (position)
         val nextPos = dao.maxPositionForWorkout(workoutId) + 1
         val newExerciseId = dao.insertExercise(
             ExerciseEntity(
                 workoutId = workoutId,
                 name = name,
                 lastDate = initialLastDate,
-                note = previous?.note,   // you can choose null if you don’t want note copied
+                note = previous?.note,   // or null if you prefer not to copy
                 position = nextPos
             )
         )
 
-        // 4) If we had a previous instance, copy its sets into the new one
+        // Prefill sets from last time if available
         if (previous != null) {
             val prevSets = dao.setsForExercise(previous.id).first()
             prevSets.forEach { set ->
@@ -71,7 +74,6 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
             }
         }
     }
-
 
     override fun exerciseById(workoutId: Long, exerciseId: Long): Flow<Exercise?> =
         combine(
@@ -101,7 +103,6 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
         reps: Int,
         weight: Float
     ) {
-        // Fetch current sets, update the one at `index`
         val current: List<SetEntity> = dao.setsForExercise(exerciseId).first()
         if (index in current.indices) {
             val target: SetEntity = current[index].copy(reps = reps, weight = weight)
@@ -121,36 +122,30 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
     }
 
     override suspend fun repeatLastIfEmpty(workoutId: Long): Boolean {
-        // If this workout already has exercises, do nothing.
         if (dao.exerciseCountForWorkout(workoutId) > 0) return false
 
-        // We need the current workout's name & timestamp.
         val current: WorkoutEntity = dao.workoutById(workoutId).first() ?: return false
-        val prev: WorkoutEntity = dao.lastWorkoutByNameBefore(current.name, current.timestamp) ?: return false
+        val prev: WorkoutEntity =
+            dao.lastWorkoutByNameBefore(current.name, current.timestamp) ?: return false
 
-        // Pull previous workout's exercises in saved order.
         val prevExercises: List<ExerciseEntity> = dao.exercisesForWorkout(prev.id).first()
         if (prevExercises.isEmpty()) return false
 
-        // Append each exercise, preserving order (position) and prefilling sets.
         var posBase = dao.maxPositionForWorkout(workoutId) + 1
         for (prevEx in prevExercises) {
-            // Insert the exercise into the current workout.
             val newExerciseId = dao.insertExercise(
                 ExerciseEntity(
                     workoutId = workoutId,
                     name = prevEx.name,
-                    lastDate = prevEx.lastDate,   // we'll eventually compute this from timestamp history
-                    note = prevEx.note,   // carry note (user can edit)
+                    lastDate = prevEx.lastDate,
+                    note = prevEx.note,
                     position = posBase++
                 )
             )
 
-            // Prefill sets using the most recent occurrence of this exercise by name.
             val latestEx = dao.lastExerciseByName(prevEx.name)
             if (latestEx != null) {
                 val latestSets: List<SetEntity> = dao.listSetsForExercise(latestEx.id)
-                // Copy sets to the new exercise id (preserve order).
                 for (s in latestSets) {
                     dao.insertSet(
                         SetEntity(
@@ -162,7 +157,6 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
                 }
             }
         }
-
         return true
     }
 
@@ -175,7 +169,10 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
         dao.touchExercisesForWorkout(workoutId, dateString)
     }
 
-    override suspend fun allExerciseNames(): List<String> =
+    // --- Exercise picker helpers ---
+    override fun allExerciseNames(): Flow<List<String>> =
         dao.allExerciseNames()
 
+    override fun searchExerciseNames(prefix: String): Flow<List<String>> =
+        dao.searchExerciseNames(prefix)
 }

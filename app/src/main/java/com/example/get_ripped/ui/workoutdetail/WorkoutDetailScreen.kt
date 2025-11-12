@@ -12,6 +12,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.get_ripped.data.model.Exercise
 import com.example.get_ripped.data.repo.WorkoutRepository
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.layout.Arrangement
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,9 +32,11 @@ fun WorkoutDetailScreen(
     val workout by vm.workout.collectAsState()
     val exercises by vm.exercises.collectAsState()
 
+    // ✅ Collect Flow<List<String>> as state at the top-level (in composition)
+    val existingNames by repo.allExerciseNames().collectAsState(initial = emptyList())
+
     var showDialog by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
-    var existingNames by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val scope = rememberCoroutineScope()
 
@@ -38,13 +44,6 @@ fun WorkoutDetailScreen(
     LaunchedEffect(exercises) {
         if (exercises.isEmpty()) {
             vm.prefillIfEmpty(workoutId)
-        }
-    }
-
-    // When dialog opens, load existing exercise names
-    LaunchedEffect(showDialog) {
-        if (showDialog) {
-            existingNames = repo.allExerciseNames()
         }
     }
 
@@ -102,7 +101,10 @@ fun WorkoutDetailScreen(
 
                     if (existingNames.isNotEmpty()) {
                         Spacer(Modifier.height(8.dp))
-                        Text("Or select an existing exercise:", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "Or select an existing exercise:",
+                            style = MaterialTheme.typography.bodySmall
+                        )
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()

@@ -74,13 +74,23 @@ interface WorkoutDao {
 
     // Distinct exercise names across all workouts, sorted alphabetically
     @Query("SELECT DISTINCT name FROM exercises ORDER BY name COLLATE NOCASE")
-    suspend fun allExerciseNames(): List<String>
+    fun allExerciseNames(): kotlinx.coroutines.flow.Flow<List<String>>
+
+    @Query("""
+    SELECT e.name
+    FROM exercises e
+    JOIN workouts w ON w.id = e.workoutId
+    WHERE e.name LIKE :prefix || '%'
+    GROUP BY e.name
+    ORDER BY MAX(w.timestamp) DESC, e.name COLLATE NOCASE ASC
+""")
+    fun searchExerciseNames(prefix: String): kotlinx.coroutines.flow.Flow<List<String>>
 
 
     // -------- Sets --------
 
     @Query("SELECT * FROM sets WHERE exerciseId = :exerciseId ORDER BY id ASC")
-    fun setsForExercise(exerciseId: Long): Flow<List<SetEntity>>
+    fun setsForExercise(exerciseId: Long): kotlinx.coroutines.flow.Flow<List<SetEntity>>
 
     // One-shot list of sets
     @Query("SELECT * FROM sets WHERE exerciseId = :exerciseId ORDER BY id ASC")
