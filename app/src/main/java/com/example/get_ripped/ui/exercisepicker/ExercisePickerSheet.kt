@@ -4,122 +4,158 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Divider
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.KeyboardActions
 
 
-/**
- * Bottom-sheet version.
- * - vm.names streams exercise names (all or filtered by query).
- * - onPick(name) is called when the user taps an item or confirms a new name.
- * - onDismiss() closes the sheet.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExercisePickerSheet(
-    vm: ExercisePickerViewModel,
-    onPick: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val names by vm.names.collectAsState()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState
-    ) {
-        ExercisePickerContent(
-            names = names,
-            onQueryChange = vm::updateQuery,
-            onPick = onPick,
-            onDismiss = onDismiss
-        )
-    }
-}
-
-/**
- * Reusable content: you can embed this in a full-screen route if you don’t want a sheet.
- */
-@Composable
-fun ExercisePickerContent(
+    query: String,
     names: List<String>,
     onQueryChange: (String) -> Unit,
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(modifier = modifier.fillMaxWidth()) {
+    // Material3 bottom sheet host
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        modifier = modifier.fillMaxWidth()
+    ) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = "Add exercise",
-                style = MaterialTheme.typography.titleLarge
-            )
-
-            Spacer(Modifier.height(12.dp))
+            Text("Add Exercise", style = MaterialTheme.typography.titleMedium)
 
             // Search / type-ahead field
             OutlinedTextField(
-                value = "", // We keep field stateless here; drive it from parent if you prefer.
+                value = query,
                 onValueChange = onQueryChange,
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Search or type a new name…") },
                 singleLine = true,
+                label = { Text("Search or type a new name…") },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(
-                    onSearch = { /*TODO*/ }
-                )
+                    onSearch = {
+                        val normalized = normalizeName(query)
+                        if (normalized.isNotEmpty()) {
+                            onPick(normalized)
+                        } else {
+                            onDismiss()
+                        }
+                    }
+                ),
+
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        TextButton(onClick = { onQueryChange("") }) { Text("Clear") }
+                    }
+                }
             )
 
-            Spacer(Modifier.height(8.dp))
+            // If query doesn't match an existing item, offer a "Create" row
+            val exists = names.any { it.equals(query.trim(), ignoreCase = true) }
+            if (query.isNotBlank() && !exists) {
+                CreateRow(
+                    title = normalizeName(query),
+                    onClick = { onPick(normalizeName(query)) }
+                )
+            } else {
+                // Small visual separation from the list
+                HorizontalDivider()
+            }
 
-            Divider()
-
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 420.dp), // keep sheet reasonable
-                contentPadding = PaddingValues(vertical = 4.dp)
-            ) {
-                // List existing names
-                items(names, key = { it }) { name ->
-                    ListItem(
-                        headlineContent = { Text(name) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onPick(name) }
-                    )
+            // Suggestions list
+            if (names.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("No matches")
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 300.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(names, key = { it.lowercase() }) { name ->
+                        SuggestionRow(
+                            title = name,
+                            onClick = { onPick(name) }
+                        )
+                        HorizontalDivider()
+                    }
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
-
-            // Tip text
-            Text(
-                text = "Tap an item to select, or type a new name above.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(Modifier.height(8.dp))
+            // Bottom actions
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = onDismiss) { Text("Close") }
+            }
         }
     }
+}
+
+@Composable
+private fun SuggestionRow(title: String, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(title, style = MaterialTheme.typography.bodyLarge)
+        Text(
+            "Select",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+private fun CreateRow(title: String, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text("Create \"$title\"", style = MaterialTheme.typography.bodyLarge)
+        Text(
+            "Create",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+/** Capitalize first letter (your UX preference) and collapse whitespace. */
+private fun normalizeName(raw: String): String {
+    val trimmed = raw.trim().replace(Regex("\\s+"), " ")
+    if (trimmed.isEmpty()) return ""
+    return trimmed.replaceFirstChar { it.uppercase() }
 }

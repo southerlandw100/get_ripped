@@ -5,6 +5,7 @@ import com.example.get_ripped.data.model.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -169,10 +170,38 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
         dao.touchExercisesForWorkout(workoutId, dateString)
     }
 
-    // --- Exercise picker helpers ---
-    override fun allExerciseNames(): Flow<List<String>> =
-        dao.allExerciseNames()
+    // --- Built-in exercise list for the picker ---
 
-    override fun searchExerciseNames(prefix: String): Flow<List<String>> =
-        dao.searchExerciseNames(prefix)
+    private val builtInNamesFlow: Flow<List<String>> =
+        flowOf(BuiltInExercises.defaultNames)
+
+    override fun allExerciseNames(): Flow<List<String>> {
+        val dbNames: Flow<List<String>> = dao.allExerciseNames()
+
+        return combine(builtInNamesFlow, dbNames) { builtIn, db ->
+            (builtIn + db)
+                .distinctBy { it.lowercase() }  // avoid duplicates, case-insensitive
+                .sorted()
+        }
+    }
+
+    override fun searchExerciseNames(prefix: String): Flow<List<String>> {
+        val trimmed = prefix.trim()
+        if (trimmed.isBlank()) return allExerciseNames()
+
+        val pattern = trimmed.lowercase()
+
+        val builtInFiltered: Flow<List<String>> =
+            builtInNamesFlow.map { list ->
+                list.filter { it.lowercase().contains(pattern) }
+            }
+
+        val dbFiltered: Flow<List<String>> = dao.searchExerciseNames(trimmed)
+
+        return combine(builtInFiltered, dbFiltered) { builtIn, db ->
+            (builtIn + db)
+                .distinctBy { it.lowercase() }
+                .sorted()
+        }
+    }
 }

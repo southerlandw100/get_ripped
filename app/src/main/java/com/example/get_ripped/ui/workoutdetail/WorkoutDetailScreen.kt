@@ -11,11 +11,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.get_ripped.data.model.Exercise
 import com.example.get_ripped.data.repo.WorkoutRepository
+import com.example.get_ripped.ui.exercisepicker.ExercisePickerSheet
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.foundation.layout.Arrangement
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,42 +22,44 @@ fun WorkoutDetailScreen(
     onBack: () -> Unit,
     onExerciseClick: (Long, Long) -> Unit = { _, _ -> }   // (workoutId, exerciseId)
 ) {
+    // ViewModel with repo + workoutId
     val vm: WorkoutDetailViewModel = viewModel(
         factory = WorkoutDetailViewModelFactory(repo, workoutId)
     )
 
-    val workout by vm.workout.collectAsState()
-    val exercises by vm.exercises.collectAsState()
+    // Screen state
+    val workout by vm.workout.collectAsState(initial = null)
+    val exercises by vm.exercises.collectAsState(initial = emptyList())
 
-    // ✅ Collect Flow<List<String>> as state at the top-level (in composition)
-    val existingNames by repo.allExerciseNames().collectAsState(initial = emptyList())
-
-    var showDialog by remember { mutableStateOf(false) }
-    var newName by remember { mutableStateOf("") }
+    // Picker sheet state
+    var showPicker by remember { mutableStateOf(false) }
+    val query by vm.query.collectAsState()
+    val names by vm.names.collectAsState() // debounced list of names (all or filtered)
 
     val scope = rememberCoroutineScope()
 
-    // Auto-repeat previous session if this workout is empty
+    // Auto-repeat last workout if this one is empty
     LaunchedEffect(exercises) {
         if (exercises.isEmpty()) {
             vm.prefillIfEmpty(workoutId)
         }
     }
 
+    // Top-level scaffold
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text(workout?.name ?: "Workout") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Text("←") }
-                }
+                navigationIcon = { IconButton(onClick = onBack) { Text("←") } }
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showDialog = true }) {
-                Text("Add Exercise")
-            }
+            FloatingActionButton(onClick = {
+                showPicker = true
+                vm.updateQuery("")       // start fresh each time (optional)
+            }) { Text("Add Exercise") }
         }
+
     ) { padding ->
         Column(
             Modifier
@@ -82,74 +81,38 @@ fun WorkoutDetailScreen(
                 }
             }
         }
+
     }
 
-    if (showDialog) {
-        AlertDialog(
-            onDismissRequest = { showDialog = false },
-            title = { Text("Add Exercise") },
-            text = {
-                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // New exercise name input
-                    OutlinedTextField(
-                        value = newName,
-                        onValueChange = { newName = it },
-                        label = { Text("New exercise name") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+    if (showPicker) {
+        ExercisePickerSheet(
+            query = query,
+            names = names,
+            onQueryChange = vm::updateQuery,
+            onPick = { rawName ->
+                // Close the sheet right away
+                showPicker = false
 
-                    if (existingNames.isNotEmpty()) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Or select an existing exercise:",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 200.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            items(existingNames) { name ->
-                                Text(
-                                    text = name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            scope.launch {
-                                                vm.addExercise(name)
-                                                showDialog = false
-                                                newName = ""
-                                            }
-                                        }
-                                        .padding(vertical = 4.dp)
-                                )
+                val trimmed = rawName.trim()
+                if (trimmed.isEmpty()) {
+                    return@ExercisePickerSheet
+                }
+
+                // Normalize: collapse spaces & Title Case each word
+                val normalized = trimmed
+                    .split(Regex("\\s+"))
+                    .filter { it.isNotBlank() }
+                    .joinToString(" ") { word ->
+                        word.lowercase()
+                            .replaceFirstChar { ch ->
+                                if (ch.isLowerCase()) ch.titlecase() else ch.toString()
                             }
-                        }
                     }
-                }
+
+                // Let the ViewModel own the coroutine + repo calls
+                vm.addExerciseFromPicker(normalized)
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    val name = newName.trim()
-                    if (name.isNotEmpty()) {
-                        scope.launch {
-                            vm.addExercise(name)
-                        }
-                    }
-                    newName = ""
-                    showDialog = false
-                }) {
-                    Text("Create")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+            onDismiss = { showPicker = false }
         )
     }
 }
@@ -172,11 +135,9 @@ private fun ExerciseCard(
             Text("Last: ${ex.lastDate}", style = MaterialTheme.typography.bodySmall)
 
             ex.sets.lastOrNull()?.let { last ->
-                val displayWeight = if (last.weight % 1f == 0f) {
-                    last.weight.toInt().toString()
-                } else {
-                    last.weight.toString()
-                }
+                val displayWeight =
+                    if (last.weight % 1f == 0f) last.weight.toInt().toString()
+                    else last.weight.toString()
                 Text(
                     "Last set: ${last.reps} reps @ $displayWeight lbs",
                     style = MaterialTheme.typography.bodySmall
@@ -185,11 +146,7 @@ private fun ExerciseCard(
 
             ex.note?.let {
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1
-                )
+                Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1)
             }
         }
     }
