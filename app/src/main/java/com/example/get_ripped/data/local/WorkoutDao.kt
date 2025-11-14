@@ -38,6 +38,8 @@ interface WorkoutDao {
     @Query("UPDATE exercises SET lastDate = :lastDate WHERE workoutId = :workoutId")
     suspend fun touchExercisesForWorkout(workoutId: Long, lastDate: String)
 
+    @Query("DELETE FROM workouts WHERE id = :workoutId")
+    suspend fun deleteWorkoutById(workoutId: Long)
 
     // -------- Exercises --------
 
@@ -86,6 +88,11 @@ interface WorkoutDao {
 """)
     fun searchExerciseNames(prefix: String): kotlinx.coroutines.flow.Flow<List<String>>
 
+    @Query("UPDATE exercises SET lastDate = :lastDate WHERE id = :exerciseId")
+    suspend fun touchExercise(exerciseId: Long, lastDate: String)
+
+    @Query("DELETE FROM exercises WHERE id = :exerciseId")
+    suspend fun deleteExerciseById(exerciseId: Long)
 
     // -------- Sets --------
 

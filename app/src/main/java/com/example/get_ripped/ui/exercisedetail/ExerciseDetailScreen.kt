@@ -60,11 +60,20 @@ fun ExerciseDetailScreen(
             CenterAlignedTopAppBar(
                 title = { Text(exercise?.name ?: "Exercise") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(
+                        onClick = {
+                            // Clean up any 0/0 sets, then navigate back
+                            scope.launch {
+                                repo.removeEmptySets(workoutId, exerciseId)
+                            }
+                            onBack()
+                        }
+                    ) {
                         Text("←")
                     }
                 }
             )
+
         },
         floatingActionButton = {
             FloatingActionButton(
@@ -73,7 +82,7 @@ fun ExerciseDetailScreen(
                         // New set starts empty; interpretation depends on config
                         // For TIMED_HOLD this is an "empty" duration until edited or timer-logged.
                         repo.addSet(workoutId, exerciseId, reps = 0, weight = 0f)
-                        repo.markWorkoutActive(workoutId)
+                        repo.markExercisePerformed(workoutId, exerciseId)
                     }
                     // Flip toggle so newest row grabs focus
                     focusNewestToggle = !focusNewestToggle
@@ -151,13 +160,13 @@ fun ExerciseDetailScreen(
                                     reps = newReps,
                                     weight = newWeight
                                 )
-                                repo.markWorkoutActive(workoutId)
+                                repo.markExercisePerformed(workoutId, exerciseId)
                             }
                         },
                         onRemove = {
                             scope.launch {
                                 repo.removeSet(workoutId, exerciseId, index)
-                                repo.markWorkoutActive(workoutId)
+                                repo.markExercisePerformed(workoutId, exerciseId)
                             }
                         }
                     )
@@ -177,12 +186,8 @@ private fun SetRow(
 ) {
     // Local editable text state, initialised from the model
     var repsText by remember(set) {
-        mutableStateOf(
-            if (set.reps == 0) ""
-            else set.reps.toString()
-        )
+        mutableStateOf(if (set.reps == 0) "" else set.reps.toString())
     }
-
     var weightText by remember(set) {
         mutableStateOf(
             if (set.weight == 0f) ""
@@ -191,7 +196,7 @@ private fun SetRow(
         )
     }
 
-    // Focus requester for the Reps/Seconds field
+    // Focus requester for the Reps/Seconds field (now on the RIGHT)
     val repsFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(autoFocusReps) {
@@ -209,7 +214,23 @@ private fun SetRow(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Reps / Seconds field
+        // Weight field (LEFT) – only if this exercise tracks weight
+        if (config.tracksWeight) {
+            OutlinedTextField(
+                value = weightText,
+                onValueChange = { txt ->
+                    weightText = txt
+                    val weight = txt.toFloatOrNull() ?: 0f
+                    onChange(set.reps, weight)
+                },
+                label = { Text("Weight") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // Reps / Seconds field (RIGHT)
         OutlinedTextField(
             value = repsText,
             onValueChange = { txt ->
@@ -225,22 +246,6 @@ private fun SetRow(
                 .weight(1f)
                 .focusRequester(repsFocusRequester)
         )
-
-        // Weight field (decimal) only if this exercise tracks weight
-        if (config.tracksWeight) {
-            OutlinedTextField(
-                value = weightText,
-                onValueChange = { txt ->
-                    weightText = txt
-                    val weight = txt.toFloatOrNull() ?: 0f
-                    onChange(set.reps, weight)
-                },
-                label = { Text("Weight") },   // shortened so it doesn't wrap
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.weight(1f)
-            )
-        }
 
         TextButton(onClick = onRemove) {
             Text("Remove")

@@ -31,15 +31,17 @@ class WorkoutDetailViewModel(
         }
     }
 
-    fun addExerciseFromPicker(normalizedName: String) {
-        viewModelScope.launch {
-            repo.addExercise(workoutId, normalizedName)
-            repo.markWorkoutActive(workoutId)
-        }
-    }
-
     fun markActive() {
         viewModelScope.launch { repo.markWorkoutActive(workoutId) }
+    }
+
+    // 🔹 NEW: delete selected exercises by id
+    fun deleteExercises(ids: List<Long>) {
+        viewModelScope.launch {
+            ids.forEach { id ->
+                repo.deleteExercise(id)
+            }
+        }
     }
 
     // --- NEW: typeahead state for ExercisePickerSheet ---

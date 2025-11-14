@@ -22,4 +22,10 @@ class HomeViewModel(private val repo: WorkoutRepository) : ViewModel() {
     fun addWorkout(name: String) {
         viewModelScope.launch { repo.addWorkout(name) }
     }
+
+    fun deleteWorkout(id: Long) {
+        viewModelScope.launch {
+            repo.deleteWorkout(id)
+        }
+    }
 }

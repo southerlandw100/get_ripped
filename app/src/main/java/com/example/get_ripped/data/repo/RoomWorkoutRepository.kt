@@ -118,6 +118,16 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
         }
     }
 
+    override suspend fun removeEmptySets(workoutId: Long, exerciseId: Long) {
+        val current: List<SetEntity> = dao.setsForExercise(exerciseId).first()
+        current
+            .filter { it.reps == 0 && it.weight == 0f }
+            .forEach { emptySet ->
+                dao.deleteSet(emptySet)
+            }
+    }
+
+
     override suspend fun updateExerciseNote(workoutId: Long, exerciseId: Long, note: String) {
         dao.updateExerciseNote(exerciseId, note)
     }
@@ -163,12 +173,24 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
 
     override suspend fun markWorkoutActive(workoutId: Long) {
         val now = System.currentTimeMillis()
-        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val formatter = SimpleDateFormat("MM/dd", Locale.getDefault())
         val dateString = formatter.format(Date(now))
 
         dao.touchWorkout(workoutId, now, dateString)
-        dao.touchExercisesForWorkout(workoutId, dateString)
     }
+
+    override suspend fun markExercisePerformed(workoutId: Long, exerciseId: Long) {
+        val now = System.currentTimeMillis()
+        val formatter = SimpleDateFormat("MM/dd", Locale.getDefault())
+        val dateString = formatter.format(Date(now))
+
+        // Workout is active because something was actually done
+        dao.touchWorkout(workoutId, now, dateString)
+        // Only this exercise’s lastDate is updated
+        dao.touchExercise(exerciseId, dateString)
+    }
+
+
 
     // --- Built-in exercise list for the picker ---
 
@@ -203,5 +225,13 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
                 .distinctBy { it.lowercase() }
                 .sorted()
         }
+    }
+
+    override suspend fun deleteWorkout(workoutId: Long) {
+        dao.deleteWorkoutById(workoutId)
+    }
+
+    override suspend fun deleteExercise(exerciseId: Long) {
+        dao.deleteExerciseById(exerciseId)
     }
 }

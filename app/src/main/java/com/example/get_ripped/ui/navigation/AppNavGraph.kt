@@ -35,7 +35,8 @@ fun AppNavGraph(
                 onAddWorkout = homeVm::addWorkout,
                 onWorkoutClick = { id ->
                     nav.navigate("workout/$id")
-                }
+                },
+                onDeleteWorkout = { id -> homeVm.deleteWorkout(id) }
             )
         }
 
