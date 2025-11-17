@@ -13,7 +13,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.get_ripped.data.model.Exercise
 import com.example.get_ripped.data.model.ExerciseTypes
 import com.example.get_ripped.data.repo.WorkoutRepository
-import com.example.get_ripped.ui.exercisepicker.ExercisePickerSheet
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -22,7 +21,8 @@ fun WorkoutDetailScreen(
     workoutId: Long,
     repo: WorkoutRepository,
     onBack: () -> Unit,
-    onExerciseClick: (Long, Long) -> Unit = { _, _ -> }   // (workoutId, exerciseId)
+    onExerciseClick: (Long, Long) -> Unit = { _, _ -> },
+    onAddExercise: (Long) -> Unit
 ) {
     // ViewModel with repo + workoutId
     val vm: WorkoutDetailViewModel = viewModel(
@@ -32,11 +32,6 @@ fun WorkoutDetailScreen(
     // Screen state
     val workout by vm.workout.collectAsState(initial = null)
     val exercises by vm.exercises.collectAsState(initial = emptyList())
-
-    // Picker sheet state
-    var showPicker by remember { mutableStateOf(false) }
-    val query by vm.query.collectAsState()
-    val names by vm.names.collectAsState()
 
     val scope = rememberCoroutineScope()
 
@@ -95,10 +90,11 @@ fun WorkoutDetailScreen(
         floatingActionButton = {
             // Hide FAB in selection mode
             if (!selectionMode) {
-                FloatingActionButton(onClick = {
-                    showPicker = true
-                    vm.updateQuery("")       // start fresh each time (optional)
-                }) { Text("Add Exercise") }
+                FloatingActionButton(
+                    onClick = { onAddExercise(workoutId) }
+                ) {
+                    Text(" Add Exercise ")
+                }
             }
         }
     ) { padding ->
@@ -147,23 +143,6 @@ fun WorkoutDetailScreen(
                 }
             }
         }
-    }
-
-    // Exercise picker bottom sheet
-    if (showPicker) {
-        ExercisePickerSheet(
-            query = query,
-            names = names,
-            onQueryChange = vm::updateQuery,
-            onPick = { chosen ->
-                showPicker = false
-                scope.launch {
-                    vm.addExercise(chosen)
-                    vm.markActive()
-                }
-            },
-            onDismiss = { showPicker = false }
-        )
     }
 
     // Delete confirmation dialog for selected exercises

@@ -15,8 +15,40 @@ interface WorkoutRepository {
 
     fun exerciseById(workoutId: Long, exerciseId: Long): Flow<Exercise?>
 
-    suspend fun addSet(workoutId: Long, exerciseId: Long, reps: Int, weight: Float)
-    suspend fun updateSet(workoutId: Long, exerciseId: Long, index: Int, reps: Int, weight: Float)
+    // --- Existing bilateral / generic set APIs ---
+    suspend fun addSet(
+        workoutId: Long,
+        exerciseId: Long,
+        reps: Int,
+        weight: Float
+    )
+
+    suspend fun updateSet(
+        workoutId: Long,
+        exerciseId: Long,
+        index: Int,
+        reps: Int,
+        weight: Float
+    )
+
+    // --- New: explicit unilateral variants (L/R reps) ---
+    suspend fun addUnilateralSet(
+        workoutId: Long,
+        exerciseId: Long,
+        repsLeft: Int,
+        repsRight: Int,
+        weight: Float
+    )
+
+    suspend fun updateUnilateralSet(
+        workoutId: Long,
+        exerciseId: Long,
+        index: Int,
+        repsLeft: Int,
+        repsRight: Int,
+        weight: Float
+    )
+
     suspend fun removeSet(workoutId: Long, exerciseId: Long, index: Int)
     suspend fun removeEmptySets(workoutId: Long, exerciseId: Long)
 
@@ -25,7 +57,6 @@ interface WorkoutRepository {
     suspend fun repeatLastIfEmpty(workoutId: Long): Boolean
     suspend fun markWorkoutActive(workoutId: Long)
     suspend fun markExercisePerformed(workoutId: Long, exerciseId: Long)
-
 
     // --- Exercise picker helpers (Flow so UI auto-updates) ---
     fun allExerciseNames(): Flow<List<String>>

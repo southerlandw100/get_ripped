@@ -3,6 +3,7 @@ package com.example.get_ripped.ui.exercisedetail
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.FloatingActionButton
@@ -18,7 +19,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.get_ripped.data.model.Exercise
@@ -49,7 +49,7 @@ fun ExerciseDetailScreen(
         mutableStateOf(exercise?.note.orEmpty())
     }
 
-    // Used to trigger focus on the newest set's Reps/Seconds field
+    // Used to trigger focus on the newest set's Reps/Seconds (or L reps) field
     var focusNewestToggle by remember { mutableStateOf(false) }
 
     // Derive exercise config (kind + capabilities) from name
@@ -79,9 +79,27 @@ fun ExerciseDetailScreen(
             FloatingActionButton(
                 onClick = {
                     scope.launch {
-                        // New set starts empty; interpretation depends on config
-                        // For TIMED_HOLD this is an "empty" duration until edited or timer-logged.
-                        repo.addSet(workoutId, exerciseId, reps = 0, weight = 0f)
+                        // For unilateral exercises, create an "empty" unilateral set;
+                        // for everything else, use the classic reps/weight set.
+                        val cfg = config
+                        if (cfg != null && cfg.kind == ExerciseKind.UNILATERAL_REPS) {
+                            repo.addUnilateralSet(
+                                workoutId = workoutId,
+                                exerciseId = exerciseId,
+                                repsLeft = 0,
+                                repsRight = 0,
+                                weight = 0f
+                            )
+                        } else {
+                            // New set starts empty; interpretation depends on config
+                            // For TIMED_HOLD this is an "empty" duration until edited or timer-logged.
+                            repo.addSet(
+                                workoutId = workoutId,
+                                exerciseId = exerciseId,
+                                reps = 0,
+                                weight = 0f
+                            )
+                        }
                         repo.markExercisePerformed(workoutId, exerciseId)
                     }
                     // Flip toggle so newest row grabs focus
@@ -147,29 +165,58 @@ fun ExerciseDetailScreen(
                     val isLast = index == exercise!!.sets.lastIndex
                     val autoFocus = isLast && focusNewestToggle
 
-                    SetRow(
-                        set = set,
-                        config = config,
-                        autoFocusReps = autoFocus,
-                        onChange = { newReps, newWeight ->
-                            scope.launch {
-                                repo.updateSet(
-                                    workoutId = workoutId,
-                                    exerciseId = exerciseId,
-                                    index = index,
-                                    reps = newReps,
-                                    weight = newWeight
-                                )
-                                repo.markExercisePerformed(workoutId, exerciseId)
+                    if (config.kind == ExerciseKind.UNILATERAL_REPS) {
+                        // UNILATERAL: show L/R + weight, talk to unilateral APIs.
+                        UnilateralSetRow(
+                            set = set,
+                            config = config,
+                            autoFocusLeft = autoFocus,
+                            onChange = { repsLeft, repsRight, weight ->
+                                scope.launch {
+                                    repo.updateUnilateralSet(
+                                        workoutId = workoutId,
+                                        exerciseId = exerciseId,
+                                        index = index,
+                                        repsLeft = repsLeft,
+                                        repsRight = repsRight,
+                                        weight = weight
+                                    )
+                                    repo.markExercisePerformed(workoutId, exerciseId)
+                                }
+                            },
+                            onRemove = {
+                                scope.launch {
+                                    repo.removeSet(workoutId, exerciseId, index)
+                                    repo.markExercisePerformed(workoutId, exerciseId)
+                                }
                             }
-                        },
-                        onRemove = {
-                            scope.launch {
-                                repo.removeSet(workoutId, exerciseId, index)
-                                repo.markExercisePerformed(workoutId, exerciseId)
+                        )
+                    } else {
+                        // Existing bilateral / reps-only / timed behavior.
+                        SetRow(
+                            set = set,
+                            config = config,
+                            autoFocusReps = autoFocus,
+                            onChange = { newReps, newWeight ->
+                                scope.launch {
+                                    repo.updateSet(
+                                        workoutId = workoutId,
+                                        exerciseId = exerciseId,
+                                        index = index,
+                                        reps = newReps,
+                                        weight = newWeight
+                                    )
+                                    repo.markExercisePerformed(workoutId, exerciseId)
+                                }
+                            },
+                            onRemove = {
+                                scope.launch {
+                                    repo.removeSet(workoutId, exerciseId, index)
+                                    repo.markExercisePerformed(workoutId, exerciseId)
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -245,6 +292,106 @@ private fun SetRow(
             modifier = Modifier
                 .weight(1f)
                 .focusRequester(repsFocusRequester)
+        )
+
+        TextButton(onClick = onRemove) {
+            Text("Remove")
+        }
+    }
+}
+
+@Composable
+private fun UnilateralSetRow(
+    set: SetEntry,
+    config: ExerciseTypeConfig,
+    autoFocusLeft: Boolean,
+    onChange: (Int, Int, Float) -> Unit,
+    onRemove: () -> Unit
+) {
+    // Start from left/right if present, otherwise fall back to reps.
+    val initialLeft = set.repsLeft ?: 0
+    val initialRight = set.repsRight ?: 0
+
+    var leftText by remember(set) {
+        mutableStateOf(if (initialLeft == 0) "" else initialLeft.toString())
+    }
+    var rightText by remember(set) {
+        mutableStateOf(if (initialRight == 0) "" else initialRight.toString())
+    }
+    var weightText by remember(set) {
+        mutableStateOf(
+            if (set.weight == 0f) ""
+            else if (set.weight % 1f == 0f) set.weight.toInt().toString()
+            else set.weight.toString()
+        )
+    }
+
+    val leftFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(autoFocusLeft) {
+        if (autoFocusLeft) {
+            leftFocusRequester.requestFocus()
+        }
+    }
+
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Weight (optional, based on config)
+        if (config.tracksWeight) {
+            OutlinedTextField(
+                value = weightText,
+                onValueChange = { txt ->
+                    weightText = txt
+                    val weight = txt.toFloatOrNull() ?: 0f
+                    val left = leftText.toIntOrNull() ?: 0
+                    val right = rightText.toIntOrNull() ?: 0
+                    onChange(left, right, weight)
+                },
+                label = { Text("Weight") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // Left reps
+        OutlinedTextField(
+            value = leftText,
+            onValueChange = { txt ->
+                leftText = txt
+                val left = txt.toIntOrNull() ?: 0
+                val right = rightText.toIntOrNull() ?: 0
+                val weight = if (config.tracksWeight) {
+                    weightText.toFloatOrNull() ?: 0f
+                } else 0f
+                onChange(left, right, weight)
+            },
+            label = { Text("L Reps") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier
+                .weight(1f)
+                .focusRequester(leftFocusRequester)
+        )
+
+        // Right reps
+        OutlinedTextField(
+            value = rightText,
+            onValueChange = { txt ->
+                rightText = txt
+                val left = leftText.toIntOrNull() ?: 0
+                val right = txt.toIntOrNull() ?: 0
+                val weight = if (config.tracksWeight) {
+                    weightText.toFloatOrNull() ?: 0f
+                } else 0f
+                onChange(left, right, weight)
+            },
+            label = { Text("R Reps") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.weight(1f)
         )
 
         TextButton(onClick = onRemove) {

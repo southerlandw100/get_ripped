@@ -17,5 +17,7 @@ data class SetEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val exerciseId: Long,
     val reps: Int,
-    val weight: Float
+    val weight: Float,
+    val repsLeft: Int? = null,
+    val repsRight: Int? = null
 )

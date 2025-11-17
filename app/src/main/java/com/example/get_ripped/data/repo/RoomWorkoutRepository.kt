@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.map
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.max   // ⬅️ for unilateral reps → `reps` field
 
 class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
 
@@ -65,11 +66,11 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
         if (previous != null) {
             val prevSets = dao.setsForExercise(previous.id).first()
             prevSets.forEach { set ->
+                // ⬇️ copy all fields, including repsLeft / repsRight, but reset PK + exerciseId
                 dao.insertSet(
-                    SetEntity(
-                        exerciseId = newExerciseId,
-                        reps = set.reps,
-                        weight = set.weight
+                    set.copy(
+                        id = 0, // autoGenerate
+                        exerciseId = newExerciseId
                     )
                 )
             }
@@ -93,8 +94,23 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
             }
         }
 
-    override suspend fun addSet(workoutId: Long, exerciseId: Long, reps: Int, weight: Float) {
-        dao.insertSet(SetEntity(exerciseId = exerciseId, reps = reps, weight = weight))
+    // --- Existing "plain" set APIs (bilateral / reps-only / timed) ---
+
+    override suspend fun addSet(
+        workoutId: Long,
+        exerciseId: Long,
+        reps: Int,
+        weight: Float
+    ) {
+        dao.insertSet(
+            SetEntity(
+                exerciseId = exerciseId,
+                reps = reps,
+                weight = weight,
+                repsLeft = null,
+                repsRight = null
+            )
+        )
     }
 
     override suspend fun updateSet(
@@ -106,10 +122,64 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
     ) {
         val current: List<SetEntity> = dao.setsForExercise(exerciseId).first()
         if (index in current.indices) {
-            val target: SetEntity = current[index].copy(reps = reps, weight = weight)
+            val existing = current[index]
+            val target: SetEntity = existing.copy(
+                reps = reps,
+                weight = weight,
+                // keep any existing repsLeft / repsRight as-is for non-unilateral flows
+                repsLeft = existing.repsLeft,
+                repsRight = existing.repsRight
+            )
             dao.updateSet(target)
         }
     }
+
+    // --- New: unilateral-specific set APIs ---
+
+    override suspend fun addUnilateralSet(
+        workoutId: Long,
+        exerciseId: Long,
+        repsLeft: Int,
+        repsRight: Int,
+        weight: Float
+    ) {
+        // For the legacy `reps` field we store something representative.
+        // Here we use the max of L/R (you could change to sum if you prefer).
+        val combinedReps = max(repsLeft, repsRight)
+
+        dao.insertSet(
+            SetEntity(
+                exerciseId = exerciseId,
+                reps = combinedReps,
+                weight = weight,
+                repsLeft = repsLeft,
+                repsRight = repsRight
+            )
+        )
+    }
+
+    override suspend fun updateUnilateralSet(
+        workoutId: Long,
+        exerciseId: Long,
+        index: Int,
+        repsLeft: Int,
+        repsRight: Int,
+        weight: Float
+    ) {
+        val current: List<SetEntity> = dao.setsForExercise(exerciseId).first()
+        if (index in current.indices) {
+            val combinedReps = max(repsLeft, repsRight)
+            val target: SetEntity = current[index].copy(
+                reps = combinedReps,
+                weight = weight,
+                repsLeft = repsLeft,
+                repsRight = repsRight
+            )
+            dao.updateSet(target)
+        }
+    }
+
+    // --- Delete / cleanup ---
 
     override suspend fun removeSet(workoutId: Long, exerciseId: Long, index: Int) {
         val current: List<SetEntity> = dao.setsForExercise(exerciseId).first()
@@ -121,12 +191,15 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
     override suspend fun removeEmptySets(workoutId: Long, exerciseId: Long) {
         val current: List<SetEntity> = dao.setsForExercise(exerciseId).first()
         current
-            .filter { it.reps == 0 && it.weight == 0f }
+            .filter { set ->
+                val left = set.repsLeft ?: 0
+                val right = set.repsRight ?: 0
+                set.weight == 0f && set.reps == 0 && left == 0 && right == 0
+            }
             .forEach { emptySet ->
                 dao.deleteSet(emptySet)
             }
     }
-
 
     override suspend fun updateExerciseNote(workoutId: Long, exerciseId: Long, note: String) {
         dao.updateExerciseNote(exerciseId, note)
@@ -158,11 +231,11 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
             if (latestEx != null) {
                 val latestSets: List<SetEntity> = dao.listSetsForExercise(latestEx.id)
                 for (s in latestSets) {
+                    // ⬇️ copy all set fields, including unilateral, but reset PK + exerciseId
                     dao.insertSet(
-                        SetEntity(
-                            exerciseId = newExerciseId,
-                            reps = s.reps,
-                            weight = s.weight
+                        s.copy(
+                            id = 0,
+                            exerciseId = newExerciseId
                         )
                     )
                 }
@@ -189,8 +262,6 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
         // Only this exercise’s lastDate is updated
         dao.touchExercise(exerciseId, dateString)
     }
-
-
 
     // --- Built-in exercise list for the picker ---
 

@@ -13,6 +13,7 @@ import com.example.get_ripped.ui.home.HomeScreen
 import com.example.get_ripped.ui.home.HomeViewModel
 import com.example.get_ripped.ui.workoutdetail.WorkoutDetailScreen
 import com.example.get_ripped.ui.exercisedetail.ExerciseDetailScreen
+import com.example.get_ripped.ui.exercisepicker.ExercisePickerScreen
 
 private const val ROUTE_HOME = "home"
 private const val ROUTE_WORKOUT = "workout/{id}"
@@ -52,6 +53,10 @@ fun AppNavGraph(
                 onBack = { nav.popBackStack() },
                 onExerciseClick = { wId, exerciseId ->
                     nav.navigate("exercise/$workoutId/$exerciseId")
+                },
+                // NEW: navigate to full-screen exercise picker
+                onAddExercise = { wId ->
+                    nav.navigate("exercisePicker/$wId")
                 }
             )
         }
@@ -70,6 +75,22 @@ fun AppNavGraph(
             ExerciseDetailScreen(
                 workoutId = workoutId,
                 exerciseId = exerciseId,
+                repo = repo,
+                onBack = { nav.popBackStack() }
+            )
+        }
+
+        // EXERCISE PICKER (full-screen)
+        composable(
+            route = "exercisePicker/{workoutId}",
+            arguments = listOf(
+                navArgument("workoutId") { type = NavType.LongType }
+            )
+        ) { backStackEntry ->
+            val workoutId = backStackEntry.arguments?.getLong("workoutId") ?: return@composable
+
+            ExercisePickerScreen(
+                workoutId = workoutId,
                 repo = repo,
                 onBack = { nav.popBackStack() }
             )

@@ -4,7 +4,7 @@ object BuiltInExercises {
 
     // Keep these already normalized (Title Case)
     val defaultNames: List<String> = listOf(
-        // Big compounds
+// Big compounds
         "Barbell Squat",
         "Front Squat",
         "Romanian Deadlift",
@@ -39,13 +39,24 @@ object BuiltInExercises {
         "Cable Triceps Pushdown",
         "Face Pull",
 
-        // Bodyweight
+        // Bodyweight / timed holds
         "Push-Up",
         "Dips",
         "Plank",
         "Side Plank",
+        "Wall Sit",
+        "Sit-Up",
+        "Air Squat",
         "Hip Thrust",
         "Glute Bridge",
-        "Russian Twists"
+        "Russian Twists",
+
+        // Unilateral (match ExerciseTypes.UNILATERAL_REPS)
+        "Lunge",
+        "Walking Lunge",
+        "Reverse Lunge",
+        "Bulgarian Split Squat",
+        "Single-Leg Romanian Deadlift",
+        "Single-Arm Row",
     )
 }
