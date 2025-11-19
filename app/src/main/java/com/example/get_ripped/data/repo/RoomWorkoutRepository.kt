@@ -39,6 +39,7 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
                     name = e.name,
                     lastDate = e.lastDate,
                     note = e.note,
+                    completedAt = e.completedAt,
                     sets = emptyList() // sets loaded in exerciseById
                 )
             }
@@ -77,6 +78,15 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
         }
     }
 
+    override suspend fun setExerciseCompleted(
+        workoutId: Long,
+        exerciseId: Long,
+        completed: Boolean
+    ) {
+        val timestamp = if (completed) System.currentTimeMillis() else null
+        dao.updateExerciseCompletedAt(exerciseId, timestamp)
+    }
+
     override fun exerciseById(workoutId: Long, exerciseId: Long): Flow<Exercise?> =
         combine(
             dao.exerciseById(workoutId, exerciseId),
@@ -89,6 +99,7 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
                     name = e.name,
                     lastDate = e.lastDate,
                     note = e.note,
+                    completedAt = e.completedAt,
                     sets = sets
                 )
             }

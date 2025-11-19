@@ -15,6 +15,11 @@ interface WorkoutRepository {
 
     fun exerciseById(workoutId: Long, exerciseId: Long): Flow<Exercise?>
 
+    suspend fun setExerciseCompleted(workoutId: Long,
+                                     exerciseId: Long,
+                                     completed: Boolean
+    )
+
     // --- Existing bilateral / generic set APIs ---
     suspend fun addSet(
         workoutId: Long,

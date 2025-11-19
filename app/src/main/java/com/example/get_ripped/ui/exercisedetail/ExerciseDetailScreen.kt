@@ -71,6 +71,26 @@ fun ExerciseDetailScreen(
                     ) {
                         Text("←")
                     }
+                },
+                actions = {
+                    val exercise = exercise
+                    if (exercise != null) {
+                        val done = exercise.isDone
+
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    val newValue = !exercise.isDone
+                                    repo.setExerciseCompleted(
+                                        workoutId = workoutId,
+                                        exerciseId = exercise.id,
+                                        completed = newValue
+                                    )
+                                }
+                            }) {
+                            Text(text = if (done) "Undo" else "Mark as Done")
+                        }
+                    }
                 }
             )
 

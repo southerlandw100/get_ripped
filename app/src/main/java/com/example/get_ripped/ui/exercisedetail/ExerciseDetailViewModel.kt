@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 
 class ExerciseDetailViewModel(
     private val repo: WorkoutRepository,
@@ -21,6 +22,20 @@ class ExerciseDetailViewModel(
         repo.exerciseById(workoutId, exerciseId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    val isDone: StateFlow<Boolean> =
+        exercise
+            .map { ex -> ex?.isDone ?: false }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun toggleCompleted() {
+        val ex = exercise.value ?: return
+        viewModelScope.launch {
+            val newValue = !ex.isDone
+            repo.setExerciseCompleted(workoutId, exerciseId, completed = newValue)
+        }
+    }
+
+
     // Actions
     fun addSet() = viewModelScope.launch {
         repo.addSet(workoutId, exerciseId, reps = 0, weight = 0f)
@@ -29,6 +44,16 @@ class ExerciseDetailViewModel(
 
     fun updateSet(index: Int, reps: Int, weight: Float) = viewModelScope.launch {
         repo.updateSet(workoutId, exerciseId, index, reps, weight)
+        val ex = exercise.value
+        val hasRealValues = reps != 0 || weight != 0f
+
+        if (ex?.completedAt == null && hasRealValues) {
+            repo.setExerciseCompleted(
+                workoutId = workoutId,
+                exerciseId = exerciseId,
+                completed = true
+            )
+        }
         repo.markWorkoutActive(workoutId)
     }
 

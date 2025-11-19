@@ -8,6 +8,7 @@ import androidx.room.Room
 import androidx.compose.material3.Text
 import com.example.get_ripped.data.local.AppDb
 import com.example.get_ripped.data.local.MIGRATION_6_7
+import com.example.get_ripped.data.local.MIGRATION_7_8
 import com.example.get_ripped.data.repo.RoomWorkoutRepository
 import com.example.get_ripped.ui.home.HomeViewModel
 import com.example.get_ripped.ui.navigation.AppNavGraph
@@ -26,7 +27,7 @@ class MainActivity : ComponentActivity() {
             AppDb::class.java,
             "get_ripped.db"
         )
-            .addMigrations(MIGRATION_6_7)
+            .addMigrations(MIGRATION_6_7, MIGRATION_7_8)
             .build()
 
         val repo = RoomWorkoutRepository(db.workoutDao())

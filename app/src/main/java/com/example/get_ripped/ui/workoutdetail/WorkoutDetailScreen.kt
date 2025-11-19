@@ -5,12 +5,27 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.get_ripped.data.model.Exercise
+import com.example.get_ripped.data.model.ExerciseKind
 import com.example.get_ripped.data.model.ExerciseTypes
 import com.example.get_ripped.data.repo.WorkoutRepository
 import kotlinx.coroutines.launch
@@ -30,35 +45,30 @@ fun WorkoutDetailScreen(
     )
 
     // Screen state
-    val workout by vm.workout.collectAsState(initial = null)
-    val exercises by vm.exercises.collectAsState(initial = emptyList())
+    val workout by vm.workout.collectAsState()
+    val exercises by vm.exercises.collectAsState()
 
-    val scope = rememberCoroutineScope()
-
-    // 🔹 Selection mode state
+    // Local UI state for selection mode / multi-delete
     var selectionMode by remember { mutableStateOf(false) }
     val selectedIds = remember { mutableStateListOf<Long>() }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    // Auto-repeat last workout if this one is empty
-    LaunchedEffect(exercises) {
-        if (exercises.isEmpty()) {
-            vm.prefillIfEmpty(workoutId)
-        }
-    }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
             if (selectionMode) {
-                // Selection-mode app bar
-                TopAppBar(
+                // Selection / delete mode AppBar
+                CenterAlignedTopAppBar(
                     navigationIcon = {
                         TextButton(
                             onClick = {
                                 selectionMode = false
                                 selectedIds.clear()
                             }
-                        ) { Text("←") }
+                        ) {
+                            Text("←")
+                        }
                     },
                     title = {
                         Text(
@@ -79,10 +89,13 @@ fun WorkoutDetailScreen(
                     }
                 )
             } else {
+                // Normal AppBar
                 CenterAlignedTopAppBar(
                     title = { Text(workout?.name ?: "Workout") },
                     navigationIcon = {
-                        IconButton(onClick = onBack) { Text("←") }
+                        TextButton(onClick = onBack) {
+                            Text("←")
+                        }
                     }
                 )
             }
@@ -104,71 +117,62 @@ fun WorkoutDetailScreen(
                 .padding(16.dp)
                 .fillMaxSize()
         ) {
-            if (exercises.isEmpty()) {
-                Text("No exercises yet.\nTap 'Add Exercise' to begin.")
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(exercises, key = { it.id }) { ex ->
-                        val isSelected = selectedIds.contains(ex.id)
+            // Exercise list
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(
+                    items = exercises,
+                    key = { it.id }
+                ) { ex ->
+                    val isSelected = ex.id in selectedIds
 
-                        ExerciseCard(
-                            ex = ex,
-                            isSelected = isSelected,
-                            onClick = {
-                                if (selectionMode) {
-                                    // Toggle selection
-                                    if (isSelected) {
-                                        selectedIds.remove(ex.id)
-                                    } else {
-                                        selectedIds.add(ex.id)
-                                    }
+                    ExerciseCard(
+                        ex = ex,
+                        isSelected = isSelected,
+                        onClick = {
+                            if (selectionMode) {
+                                if (isSelected) {
+                                    selectedIds.remove(ex.id)
                                     if (selectedIds.isEmpty()) {
                                         selectionMode = false
                                     }
                                 } else {
-                                    onExerciseClick(workoutId, ex.id)
+                                    selectedIds.add(ex.id)
                                 }
-                            },
-                            onLongPress = {
-                                if (!selectionMode) {
-                                    selectionMode = true
-                                    if (!isSelected) {
-                                        selectedIds.add(ex.id)
-                                    }
+                            } else {
+                                onExerciseClick(workoutId, ex.id)
+                            }
+                        },
+                        onLongPress = {
+                            if (!selectionMode) {
+                                selectionMode = true
+                                if (!isSelected) {
+                                    selectedIds.add(ex.id)
                                 }
                             }
-                        )
-                        Spacer(Modifier.height(4.dp))
-                    }
+                        }
+                    )
                 }
             }
         }
     }
 
-    // Delete confirmation dialog for selected exercises
-    if (showDeleteConfirm && selectedIds.isNotEmpty()) {
-        val count = selectedIds.size
+    // Delete confirmation dialog
+    if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = {
-                Text(
-                    if (count == 1) "Remove exercise?"
-                    else "Remove $count exercises?"
-                )
-            },
-            text = {
-                Text("This will remove the selected exercises and all of their sets from this workout.")
-            },
+            title = { Text("Delete exercises?") },
+            text = { Text("This will permanently delete the selected exercises from this workout.") },
             confirmButton = {
                 TextButton(onClick = {
-                    val ids = selectedIds.toList()
                     scope.launch {
-                        vm.deleteExercises(ids)
-                        vm.markActive()
+                        vm.deleteExercises(selectedIds.toList())
+                        selectedIds.clear()
+                        selectionMode = false
+                        showDeleteConfirm = false
                     }
-                    selectedIds.clear()
-                    selectionMode = false
-                    showDeleteConfirm = false
                 }) {
                     Text("Delete")
                 }
@@ -209,30 +213,60 @@ private fun ExerciseCard(
         color = bgColor
     ) {
         Column(Modifier.padding(16.dp)) {
-            Text(ex.name, style = MaterialTheme.typography.titleMedium)
-            Text("Last: ${ex.lastDate}", style = MaterialTheme.typography.bodySmall)
 
+            // HEADER: name + done check icon (if completed)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    ex.name,
+                    style = MaterialTheme.typography.titleMedium
+                )
+
+                if (ex.isDone) {
+                    Icon(
+                        imageVector = Icons.Filled.Check,
+                        contentDescription = "Completed",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            // Last date
+            Text(
+                text = "Last: ${ex.lastDate}",
+                style = MaterialTheme.typography.bodySmall
+            )
+
+            // Last set info
             ex.sets.lastOrNull()?.let { last ->
+                Spacer(Modifier.height(2.dp))
+
                 when (config.kind) {
-                    com.example.get_ripped.data.model.ExerciseKind.TIMED_HOLD -> {
+                    ExerciseKind.TIMED_HOLD -> {
                         Text(
                             "Last set: ${last.reps} sec",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
-                    com.example.get_ripped.data.model.ExerciseKind.REPS_ONLY -> {
+
+                    ExerciseKind.REPS_ONLY -> {
                         Text(
                             "Last set: ${last.reps} reps",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
-                    com.example.get_ripped.data.model.ExerciseKind.UNILATERAL_REPS -> {
+
+                    ExerciseKind.UNILATERAL_REPS -> {
                         Text(
                             "Last set: ${last.reps} reps (per side)",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
-                    com.example.get_ripped.data.model.ExerciseKind.WEIGHT_REPS -> {
+
+                    ExerciseKind.WEIGHT_REPS -> {
                         val displayWeight =
                             if (last.weight % 1f == 0f) last.weight.toInt().toString()
                             else last.weight.toString()
@@ -245,9 +279,14 @@ private fun ExerciseCard(
                 }
             }
 
+            // Optional note preview
             ex.note?.let {
                 Spacer(Modifier.height(4.dp))
-                Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1
+                )
             }
         }
     }

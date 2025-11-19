@@ -6,7 +6,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [WorkoutEntity::class, ExerciseEntity::class, SetEntity::class],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class AppDb : RoomDatabase() {
@@ -20,5 +20,12 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
 
         // Backfill: existing rows treat the old `reps` as both sides.
         db.execSQL("UPDATE sets SET repsLeft = reps, repsRight = reps")
+    }
+}
+
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // completedAt is nullable Long, so SIMPLE add-column
+        db.execSQL("ALTER TABLE exercises ADD COLUMN completedAt INTEGER")
     }
 }

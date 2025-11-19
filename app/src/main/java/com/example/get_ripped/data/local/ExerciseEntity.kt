@@ -27,5 +27,6 @@ data class ExerciseEntity(
     val name: String,
     val lastDate: String,
     val note: String?,
-    @ColumnInfo(name = "position") val position: Int
+    @ColumnInfo(name = "position") val position: Int,
+    @ColumnInfo(name = "completedAt") val completedAt: Long? = null
 )

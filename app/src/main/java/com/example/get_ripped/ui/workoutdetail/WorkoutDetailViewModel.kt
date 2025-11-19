@@ -15,9 +15,32 @@ class WorkoutDetailViewModel(
     private val workoutId: Long
 ) : ViewModel() {
 
-    // existing state
-    val workout: Flow<Workout?> = repo.workoutById(workoutId)
-    val exercises: Flow<List<Exercise>> = repo.exercisesForWorkout(workoutId)
+    // Workout as StateFlow so UI can collect with initial = null
+    val workout: StateFlow<Workout?> =
+        repo.workoutById(workoutId)
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = null
+            )
+
+    // Exercises sorted so:
+    //  - done exercises first, ordered by completedAt (oldest first)
+    //  - not-done exercises after, preserving their original order
+    val exercises: StateFlow<List<Exercise>> =
+        repo.exercisesForWorkout(workoutId)
+            .map { list ->
+                val (done, notDone) = list.partition { it.isDone }
+
+                val doneSorted = done.sortedBy { it.completedAt ?: Long.MAX_VALUE }
+
+                doneSorted + notDone
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList()
+            )
 
     fun prefillIfEmpty(workoutId: Long) {
         viewModelScope.launch {
@@ -35,7 +58,7 @@ class WorkoutDetailViewModel(
         viewModelScope.launch { repo.markWorkoutActive(workoutId) }
     }
 
-    // 🔹 NEW: delete selected exercises by id
+    // Delete selected exercises by id
     fun deleteExercises(ids: List<Long>) {
         viewModelScope.launch {
             ids.forEach { id ->
@@ -44,7 +67,7 @@ class WorkoutDetailViewModel(
         }
     }
 
-    // --- NEW: typeahead state for ExercisePickerSheet ---
+    // --- Typeahead state for ExercisePickerSheet ---
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()

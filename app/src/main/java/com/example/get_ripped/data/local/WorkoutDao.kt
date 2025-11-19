@@ -94,6 +94,12 @@ interface WorkoutDao {
     @Query("DELETE FROM exercises WHERE id = :exerciseId")
     suspend fun deleteExerciseById(exerciseId: Long)
 
+    @Query("UPDATE exercises SET completedAt = :completedAt WHERE id = :exerciseId")
+    suspend fun updateExerciseCompletedAt(
+        exerciseId: Long,
+        completedAt: Long?
+    )
+
     // -------- Sets --------
 
     @Query("SELECT * FROM sets WHERE exerciseId = :exerciseId ORDER BY id ASC")

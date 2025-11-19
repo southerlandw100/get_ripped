@@ -5,5 +5,9 @@ data class Exercise (
     val name: String,
     val lastDate: String,
     val note: String? = null,
+    val completedAt: Long? = null,
     val sets: List<SetEntry> = emptyList()
-)
+) {
+    val isDone: Boolean
+        get() = completedAt != null
+}
