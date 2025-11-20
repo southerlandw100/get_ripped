@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.get_ripped.data.model.Exercise
 import com.example.get_ripped.data.model.Workout
 import com.example.get_ripped.data.repo.WorkoutRepository
+import com.example.get_ripped.data.model.SetEntry
+import com.example.get_ripped.data.repo.RoomWorkoutRepository
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -14,6 +16,17 @@ class WorkoutDetailViewModel(
     private val repo: WorkoutRepository,
     private val workoutId: Long
 ) : ViewModel() {
+
+    init {
+        viewModelScope.launch {
+            // Freshen up completion flags if this workout is from a previous day
+            repo.resetCompletedIfNewDay(workoutId)
+        }
+    }
+
+    // Base flow of exercises from the repo
+    private val rawExercises: Flow<List<Exercise>> =
+        repo.exercisesForWorkout(workoutId)
 
     // Workout as StateFlow so UI can collect with initial = null
     val workout: StateFlow<Workout?> =
@@ -40,6 +53,25 @@ class WorkoutDetailViewModel(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000),
                 initialValue = emptyList()
+            )
+
+    // All-time PR per exercise name for the exercises currently in this workout
+    val prsByName: StateFlow<Map<String, SetEntry?>> =
+        rawExercises
+            .flatMapLatest { list ->
+                flow {
+                    val names = list.map { it.name }.distinct()
+                    val prs: Map<String, SetEntry?> =
+                        names.associateWith { name ->
+                            repo.prForExerciseName(name)
+                        }
+                    emit(prs)
+                }
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyMap()
             )
 
     fun prefillIfEmpty(workoutId: Long) {

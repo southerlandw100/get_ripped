@@ -28,6 +28,7 @@ import com.example.get_ripped.data.model.Exercise
 import com.example.get_ripped.data.model.ExerciseKind
 import com.example.get_ripped.data.model.ExerciseTypes
 import com.example.get_ripped.data.repo.WorkoutRepository
+import com.example.get_ripped.data.model.SetEntry
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,6 +48,7 @@ fun WorkoutDetailScreen(
     // Screen state
     val workout by vm.workout.collectAsState()
     val exercises by vm.exercises.collectAsState()
+    val prsByName by vm.prsByName.collectAsState()
 
     // Local UI state for selection mode / multi-delete
     var selectionMode by remember { mutableStateOf(false) }
@@ -130,6 +132,7 @@ fun WorkoutDetailScreen(
 
                     ExerciseCard(
                         ex = ex,
+                        pr = prsByName[ex.name],
                         isSelected = isSelected,
                         onClick = {
                             if (selectionMode) {
@@ -190,6 +193,7 @@ fun WorkoutDetailScreen(
 @Composable
 private fun ExerciseCard(
     ex: Exercise,
+    pr: SetEntry?,
     isSelected: Boolean,
     onClick: () -> Unit,
     onLongPress: () -> Unit
@@ -234,11 +238,27 @@ private fun ExerciseCard(
                 }
             }
 
-            // Last date
-            Text(
-                text = "Last: ${ex.lastDate}",
-                style = MaterialTheme.typography.bodySmall
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Left side: Last date
+                Text(
+                    text = "Last: ${ex.lastDate}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                // Right side: PR (if exists)
+                pr?.let { best ->
+                    Text(
+                        text = "PR: ${formatPr(config.kind, best)}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
 
             // Last set info
             ex.sets.lastOrNull()?.let { last ->
@@ -288,6 +308,27 @@ private fun ExerciseCard(
                     maxLines = 1
                 )
             }
+        }
+    }
+}
+
+private fun formatPr(kind: ExerciseKind, pr: SetEntry): String {
+    return when (kind) {
+        ExerciseKind.TIMED_HOLD -> "${pr.reps} sec"
+        ExerciseKind.REPS_ONLY -> "${pr.reps} reps"
+        ExerciseKind.UNILATERAL_REPS -> {
+            val left = pr.repsLeft ?: pr.reps
+            val right = pr.repsRight ?: pr.reps
+            val displayWeight =
+                if (pr.weight % 1f == 0f) pr.weight.toInt().toString()
+                else pr.weight.toString()
+            "$left/$right @ $displayWeight lbs"
+        }
+        ExerciseKind.WEIGHT_REPS -> {
+            val displayWeight =
+                if (pr.weight % 1f == 0f) pr.weight.toInt().toString()
+                else pr.weight.toString()
+            "${pr.reps} @ $displayWeight lbs"
         }
     }
 }

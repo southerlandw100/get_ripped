@@ -10,7 +10,10 @@ import kotlinx.coroutines.flow.map
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.max   // ⬅️ for unilateral reps → `reps` field
+import kotlin.math.max
+import com.example.get_ripped.data.model.SetEntry
+import com.example.get_ripped.data.model.ExerciseTypes
+import com.example.get_ripped.data.model.ExerciseKind
 
 class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
 
@@ -145,7 +148,7 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
         }
     }
 
-    // --- New: unilateral-specific set APIs ---
+    // unilateral-specific set APIs
 
     override suspend fun addUnilateralSet(
         workoutId: Long,
@@ -255,6 +258,10 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
         return true
     }
 
+    override suspend fun clearAllSets(workoutId: Long, exerciseId: Long) {
+        dao.deleteAllSetsForExercise(exerciseId)
+    }
+
     override suspend fun markWorkoutActive(workoutId: Long) {
         val now = System.currentTimeMillis()
         val formatter = SimpleDateFormat("MM/dd", Locale.getDefault())
@@ -273,6 +280,21 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
         // Only this exercise’s lastDate is updated
         dao.touchExercise(exerciseId, dateString)
     }
+
+    override suspend fun resetCompletedIfNewDay(workoutId: Long) {
+        val now = System.currentTimeMillis()
+        val formatter = SimpleDateFormat("MM/dd", Locale.getDefault())
+        val today = formatter.format(Date(now))
+
+        val workoutEntity = dao.workoutById(workoutId).first() ?: return
+
+        // If the workout was last touched on a different day,
+        // clear all completedAt flags for a fresh session.
+        if (workoutEntity.lastDate != today) {
+            dao.clearCompletedFlagsForWorkout(workoutId)
+        }
+    }
+
 
     // --- Built-in exercise list for the picker ---
 
@@ -315,5 +337,37 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
 
     override suspend fun deleteExercise(exerciseId: Long) {
         dao.deleteExerciseById(exerciseId)
+    }
+
+    override suspend fun prForExerciseName(name: String): SetEntry? {
+        val config = ExerciseTypes.configForName(name)
+        val allSets: List<SetEntity> = dao.allSetsForExerciseName(name)
+
+        // Filter out "empty" sets
+        val nonEmpty = allSets.filter { s ->
+            val left = s.repsLeft ?: 0
+            val right = s.repsRight ?: 0
+            !(s.weight == 0f && s.reps == 0 && left == 0 && right == 0)
+        }
+
+        if (nonEmpty.isEmpty()) return null
+
+        val best: SetEntity? = when (config.kind) {
+            ExerciseKind.WEIGHT_REPS,
+            ExerciseKind.UNILATERAL_REPS -> {
+                // Max weight, then max reps as tie-breaker
+                nonEmpty.maxWith(
+                    compareBy<SetEntity> { it.weight }
+                        .thenBy { it.reps }
+                )
+            }
+
+            ExerciseKind.REPS_ONLY,
+            ExerciseKind.TIMED_HOLD -> {
+                nonEmpty.maxByOrNull { it.reps }
+            }
+        }
+
+        return best?.toDomain()
     }
 }

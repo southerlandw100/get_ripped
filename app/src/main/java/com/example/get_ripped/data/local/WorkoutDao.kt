@@ -100,6 +100,9 @@ interface WorkoutDao {
         completedAt: Long?
     )
 
+    @Query("UPDATE exercises SET completedAt = NULL WHERE workoutId = :workoutId")
+    suspend fun clearCompletedFlagsForWorkout(workoutId: Long)
+
     // -------- Sets --------
 
     @Query("SELECT * FROM sets WHERE exerciseId = :exerciseId ORDER BY id ASC")
@@ -121,4 +124,18 @@ interface WorkoutDao {
 
     @Query("UPDATE exercises SET note = :note WHERE id = :exerciseId")
     suspend fun updateExerciseNote(exerciseId: Long, note: String)
+
+    // All sets across ALL workouts for a given exercise name
+    @Query("""
+    SELECT s.*
+    FROM sets s
+    JOIN exercises e ON e.id = s.exerciseId
+    WHERE e.name = :name
+""")
+    suspend fun allSetsForExerciseName(name: String): List<SetEntity>
+
+    @Query("DELETE FROM sets WHERE exerciseId = :exerciseId")
+    suspend fun deleteAllSetsForExercise(exerciseId: Long)
+
+
 }

@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
@@ -15,6 +14,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -39,6 +44,9 @@ fun ExerciseDetailScreen(
     onBack: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
+
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
 
     // Stream this exercise from the repo
     val exercise: Exercise? by repo.exerciseById(workoutId, exerciseId)
@@ -73,25 +81,59 @@ fun ExerciseDetailScreen(
                     }
                 },
                 actions = {
-                    val exercise = exercise
-                    if (exercise != null) {
-                        val done = exercise.isDone
+                    val ex = exercise
+                    if (ex != null) {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(
+                                imageVector = Icons.Filled.MoreVert,
+                                contentDescription = "More options"
+                            )
+                        }
 
-                        TextButton(
-                            onClick = {
-                                scope.launch {
-                                    val newValue = !exercise.isDone
-                                    repo.setExerciseCompleted(
-                                        workoutId = workoutId,
-                                        exerciseId = exercise.id,
-                                        completed = newValue
-                                    )
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            // 1) Mark as Done / Not Done
+                            DropdownMenuItem(
+                                text = {
+                                    Text(if (ex.isDone) "Mark as Not Done" else "Mark as Done")
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    scope.launch {
+                                        repo.setExerciseCompleted(
+                                            workoutId = workoutId,
+                                            exerciseId = ex.id,
+                                            completed = !ex.isDone
+                                        )
+                                    }
                                 }
-                            }) {
-                            Text(text = if (done) "Undo" else "Mark as Done")
+                            )
+
+                            // 2) Clear all sets
+                            DropdownMenuItem(
+                                text = { Text("Clear all sets") },
+                                onClick = {
+                                    menuExpanded = false
+                                    scope.launch {
+                                        repo.clearAllSets(workoutId, ex.id)
+                                    }
+                                }
+                            )
+
+                            // 3) Delete exercise
+                            DropdownMenuItem(
+                                text = { Text("Delete exercise") },
+                                onClick = {
+                                    menuExpanded = false
+                                    showDeleteDialog = true
+                                }
+                            )
                         }
                     }
                 }
+
             )
 
         },
@@ -241,7 +283,39 @@ fun ExerciseDetailScreen(
             }
         }
     }
+
+
+// ⬇️ Add this AFTER the Scaffold body, still inside ExerciseDetailScreen
+if (showDeleteDialog) {
+    AlertDialog(
+        onDismissRequest = { showDeleteDialog = false },
+        title = { Text("Delete exercise?") },
+        text = {
+            Text("This will remove this exercise and all of its sets from this workout.")
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    showDeleteDialog = false
+                    scope.launch {
+                        repo.deleteExercise(exerciseId)
+                        onBack()
+                    }
+                }
+            ) {
+                Text("Delete")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { showDeleteDialog = false }) {
+                Text("Cancel")
+            }
+        }
+    )
 }
+}
+
+
 
 @Composable
 private fun SetRow(

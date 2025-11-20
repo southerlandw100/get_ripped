@@ -2,6 +2,7 @@ package com.example.get_ripped.data.repo
 
 import com.example.get_ripped.data.model.Exercise
 import com.example.get_ripped.data.model.Workout
+import com.example.get_ripped.data.model.SetEntry
 import kotlinx.coroutines.flow.Flow
 
 interface WorkoutRepository {
@@ -20,7 +21,12 @@ interface WorkoutRepository {
                                      completed: Boolean
     )
 
-    // --- Existing bilateral / generic set APIs ---
+    // All-time best set for this exercise name, or null if none
+    suspend fun prForExerciseName(name: String): SetEntry?
+
+    suspend fun resetCompletedIfNewDay(workoutId: Long)
+
+    // Existing bilateral / generic set APIs
     suspend fun addSet(
         workoutId: Long,
         exerciseId: Long,
@@ -36,7 +42,9 @@ interface WorkoutRepository {
         weight: Float
     )
 
-    // --- New: explicit unilateral variants (L/R reps) ---
+    suspend fun clearAllSets(workoutId: Long, exerciseId: Long)
+
+    // explicit unilateral variants (L/R reps)
     suspend fun addUnilateralSet(
         workoutId: Long,
         exerciseId: Long,
