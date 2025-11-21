@@ -5,16 +5,19 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -22,16 +25,20 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.get_ripped.data.model.Exercise
 import com.example.get_ripped.data.model.ExerciseKind
 import com.example.get_ripped.data.model.ExerciseTypes
-import com.example.get_ripped.data.repo.WorkoutRepository
 import com.example.get_ripped.data.model.SetEntry
+import com.example.get_ripped.data.repo.WorkoutRepository
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun WorkoutDetailScreen(
     workoutId: Long,
@@ -56,6 +63,18 @@ fun WorkoutDetailScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
+
+    // Rename title state
+    val focusManager = LocalFocusManager.current
+    var isEditingTitle by remember { mutableStateOf(false) }
+    var titleDraft by remember { mutableStateOf("") }
+    val titleFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(isEditingTitle) {
+        if (isEditingTitle) {
+            titleFocusRequester.requestFocus()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -91,12 +110,70 @@ fun WorkoutDetailScreen(
                     }
                 )
             } else {
-                // Normal AppBar
+                // Normal AppBar with inline rename on long-press
+                val currentName = workout?.name ?: "Workout"
+
+                fun commitRename() {
+                    val trimmed = titleDraft.trim()
+                    val w = workout
+                    if (w != null && trimmed.isNotEmpty() && trimmed != w.name) {
+                        vm.renameWorkout(trimmed)
+                    }
+                    isEditingTitle = false
+                }
+
                 CenterAlignedTopAppBar(
-                    title = { Text(workout?.name ?: "Workout") },
+                    title = {
+                        if (isEditingTitle && workout != null) {
+                            OutlinedTextField(
+                                value = titleDraft,
+                                onValueChange = { titleDraft = it },
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(titleFocusRequester),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+                                        commitRename()
+                                        focusManager.clearFocus()
+                                    }
+                                )
+                            )
+                        } else {
+                            Text(
+                                text = currentName,
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.combinedClickable(
+                                    onClick = { /* no-op */ },
+                                    onLongClick = {
+                                        workout?.let {
+                                            isEditingTitle = true
+                                            titleDraft = it.name
+                                        }
+                                    }
+                                )
+                            )
+                        }
+                    },
                     navigationIcon = {
-                        TextButton(onClick = onBack) {
-                            Text("←")
+                        IconButton(
+                            onClick = {
+                                if (isEditingTitle) {
+                                    commitRename()
+                                    focusManager.clearFocus()
+                                } else {
+                                    onBack()
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                modifier = Modifier.size(32.dp),
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
                         }
                     }
                 )

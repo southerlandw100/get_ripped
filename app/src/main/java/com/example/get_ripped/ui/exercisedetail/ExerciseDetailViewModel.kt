@@ -64,17 +64,18 @@ class ExerciseDetailViewModel(
     fun updateNote(note: String) = viewModelScope.launch {
         repo.updateExerciseNote(workoutId, exerciseId, note)
     }
-}
 
-/** Simple factory so you can pass repo + IDs without DI **/
-class ExerciseDetailViewModelFactory(
-    private val repo: WorkoutRepository,
-    private val workoutId: Long,
-    private val exerciseId: Long
-) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        require(modelClass.isAssignableFrom(ExerciseDetailViewModel::class.java))
-        return ExerciseDetailViewModel(repo, workoutId, exerciseId) as T
+
+    /** Simple factory so you can pass repo + IDs without DI **/
+    class ExerciseDetailViewModelFactory(
+        private val repo: WorkoutRepository,
+        private val workoutId: Long,
+        private val exerciseId: Long
+    ) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            require(modelClass.isAssignableFrom(ExerciseDetailViewModel::class.java))
+            return ExerciseDetailViewModel(repo, workoutId, exerciseId) as T
+        }
     }
 }

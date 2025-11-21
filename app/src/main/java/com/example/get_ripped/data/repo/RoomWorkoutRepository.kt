@@ -12,8 +12,10 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.max
 import com.example.get_ripped.data.model.SetEntry
+import com.example.get_ripped.data.model.ExerciseHistoryEntry
 import com.example.get_ripped.data.model.ExerciseTypes
 import com.example.get_ripped.data.model.ExerciseKind
+import kotlinx.coroutines.flow.firstOrNull
 
 class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
 
@@ -108,7 +110,99 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
             }
         }
 
-    // --- Existing "plain" set APIs (bilateral / reps-only / timed) ---
+    override suspend fun renameWorkout(workoutId: Long, name: String) {
+        dao.renameWorkout(workoutId, name)
+    }
+
+    override suspend fun exerciseHistoryForName(exerciseName: String): List<ExerciseHistoryEntry> {
+        val config = ExerciseTypes.configForName(exerciseName)
+        val allSets: List<SetEntity> = dao.allSetsForExerciseName(exerciseName)
+
+        if (allSets.isEmpty()) return emptyList()
+
+        // 1) Map exerciseId -> ExerciseEntity (to get workoutId)
+        val exerciseIds = allSets.map { it.exerciseId }.distinct()
+        val exercisesById: Map<Long, ExerciseEntity> =
+            dao.exercisesByIds(exerciseIds).associateBy { it.id }
+
+        // 2) Group sets by workoutId using that mapping
+        val setsByWorkout = mutableMapOf<Long, MutableList<SetEntity>>()
+        for (set in allSets) {
+            val ex = exercisesById[set.exerciseId] ?: continue
+            val list = setsByWorkout.getOrPut(ex.workoutId) { mutableListOf() }
+            list.add(set)
+        }
+
+        if (setsByWorkout.isEmpty()) return emptyList()
+
+        // 3) Fetch workouts
+        val workoutIds = setsByWorkout.keys.toList()
+        val workoutsById: Map<Long, WorkoutEntity> =
+            dao.workoutsByIds(workoutIds).associateBy { it.id }
+
+        // 4) Build history entries
+        val entries = setsByWorkout.mapNotNull { (workoutId, setsForWorkout) ->
+            val workoutEntity = workoutsById[workoutId] ?: return@mapNotNull null
+
+            // filter out "empty" sets (0 reps, 0 weight, etc.)
+            val nonEmpty = setsForWorkout.filter { s ->
+                val left = s.repsLeft ?: 0
+                val right = s.repsRight ?: 0
+                !(s.weight == 0f && s.reps == 0 && left == 0 && right == 0)
+            }
+
+            val bestSetEntity: SetEntity? = if (nonEmpty.isEmpty()) {
+                null
+            } else {
+                when (config.kind) {
+                    ExerciseKind.WEIGHT_REPS,
+                    ExerciseKind.UNILATERAL_REPS -> {
+                        nonEmpty.maxWithOrNull(
+                            compareBy<SetEntity> { it.weight }.thenBy { it.reps }
+                        )
+                    }
+                    ExerciseKind.REPS_ONLY,
+                    ExerciseKind.TIMED_HOLD -> {
+                        nonEmpty.maxByOrNull { it.reps }
+                    }
+                }
+            }
+
+            val topSet = bestSetEntity?.toDomain()
+
+            // simple volume metric
+            val volume: Float = when (config.kind) {
+                ExerciseKind.WEIGHT_REPS -> {
+                    nonEmpty.sumOf { s -> (s.weight * s.reps).toDouble() }.toFloat()
+                }
+                ExerciseKind.UNILATERAL_REPS -> {
+                    nonEmpty.sumOf { s ->
+                        val left = s.repsLeft ?: 0
+                        val right = s.repsRight ?: 0
+                        (s.weight * (left + right)).toDouble()
+                    }.toFloat()
+                }
+                ExerciseKind.REPS_ONLY,
+                ExerciseKind.TIMED_HOLD -> {
+                    nonEmpty.sumOf { it.reps }.toFloat()
+                }
+            }
+
+            ExerciseHistoryEntry(
+                workoutId = workoutId,
+                workoutName = workoutEntity.name,
+                date = workoutEntity.lastDate,
+                topSet = topSet,
+                volume = volume,
+                sets = nonEmpty.map { it.toDomain() }
+            )
+        }
+
+        return entries.sortedByDescending { it.date ?: "" }
+    }
+
+
+    // Existing "plain" set APIs (bilateral / reps-only / timed)
 
     override suspend fun addSet(
         workoutId: Long,
@@ -370,4 +464,9 @@ class RoomWorkoutRepository(private val dao: WorkoutDao) : WorkoutRepository {
 
         return best?.toDomain()
     }
+
+    override suspend fun deleteExerciseSession(exerciseName: String, workoutId: Long) {
+        dao.deleteSetsForExerciseInWorkout(exerciseName, workoutId)
+    }
+
 }

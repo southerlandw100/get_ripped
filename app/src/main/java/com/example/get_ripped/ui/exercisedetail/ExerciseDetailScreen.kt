@@ -41,7 +41,8 @@ fun ExerciseDetailScreen(
     workoutId: Long,
     exerciseId: Long,
     repo: WorkoutRepository,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onViewHistory: (String) -> Unit
 ) {
     val scope = rememberCoroutineScope()
 
@@ -128,6 +129,17 @@ fun ExerciseDetailScreen(
                                 onClick = {
                                     menuExpanded = false
                                     showDeleteDialog = true
+                                }
+                            )
+
+                            // 4) View History
+                            DropdownMenuItem(
+                                text = { Text("View history") },
+                                onClick = {
+                                    menuExpanded = false
+                                    ex.name.let { name ->
+                                        onViewHistory(name)
+                                    }
                                 }
                             )
                         }

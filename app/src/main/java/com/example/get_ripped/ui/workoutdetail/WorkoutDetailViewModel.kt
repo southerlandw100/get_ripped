@@ -99,7 +99,26 @@ class WorkoutDetailViewModel(
         }
     }
 
-    // --- Typeahead state for ExercisePickerSheet ---
+    fun renameWorkout(newNameRaw: String) {
+        viewModelScope.launch {
+            val normalized = normalizeWorkoutName(newNameRaw)
+            if (normalized.isNotEmpty()) {
+                repo.renameWorkout(workoutId, normalized)
+            }
+        }
+    }
+
+    private fun normalizeWorkoutName(raw: String): String {
+        val trimmed = raw.trim().replace(Regex("\\s+"), " ")
+        if (trimmed.isEmpty()) return ""
+        return trimmed
+            .split(" ")
+            .joinToString(" ") { word ->
+                word.lowercase().replaceFirstChar { it.titlecase() }
+            }
+    }
+
+    // Typeahead state for ExercisePickerSheet
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()

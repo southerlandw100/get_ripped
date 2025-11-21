@@ -3,6 +3,7 @@ package com.example.get_ripped.data.repo
 import com.example.get_ripped.data.model.Exercise
 import com.example.get_ripped.data.model.Workout
 import com.example.get_ripped.data.model.SetEntry
+import com.example.get_ripped.data.model.ExerciseHistoryEntry
 import kotlinx.coroutines.flow.Flow
 
 interface WorkoutRepository {
@@ -25,6 +26,10 @@ interface WorkoutRepository {
     suspend fun prForExerciseName(name: String): SetEntry?
 
     suspend fun resetCompletedIfNewDay(workoutId: Long)
+
+    suspend fun renameWorkout(workoutId: Long, name: String)
+
+    suspend fun exerciseHistoryForName(exerciseName: String): List<ExerciseHistoryEntry>
 
     // Existing bilateral / generic set APIs
     suspend fun addSet(
@@ -77,4 +82,7 @@ interface WorkoutRepository {
 
     suspend fun deleteWorkout(workoutId: Long)
     suspend fun deleteExercise(exerciseId: Long)
+
+    suspend fun deleteExerciseSession(exerciseName: String, workoutId: Long)
+
 }

@@ -18,8 +18,16 @@ interface WorkoutDao {
     @Insert
     suspend fun insertWorkout(w: WorkoutEntity): Long
 
+    // Select ONE workout
     @Query("SELECT * FROM workouts WHERE id = :id")
     fun workoutById(id: Long): Flow<WorkoutEntity?>
+
+    // Selects multiple workouts
+    @Query("SELECT * FROM workouts WHERE id IN (:ids)")
+    suspend fun workoutsByIds(ids: List<Long>): List<WorkoutEntity>
+
+
+
 
     // Find the last workout by exact name before a given time (for auto-repeat later)
     @Query("""
@@ -40,6 +48,9 @@ interface WorkoutDao {
 
     @Query("DELETE FROM workouts WHERE id = :workoutId")
     suspend fun deleteWorkoutById(workoutId: Long)
+
+    @Query("UPDATE workouts SET name = :newName WHERE id = :workoutId")
+    suspend fun renameWorkout(workoutId: Long, newName: String)
 
     // -------- Exercises --------
 
@@ -137,5 +148,19 @@ interface WorkoutDao {
     @Query("DELETE FROM sets WHERE exerciseId = :exerciseId")
     suspend fun deleteAllSetsForExercise(exerciseId: Long)
 
+    @Query("SELECT * FROM exercises WHERE id IN (:ids)")
+    suspend fun exercisesByIds(ids: List<Long>): List<ExerciseEntity>
+
+    @Query("""
+    DELETE FROM sets
+    WHERE exerciseId IN (
+        SELECT e.id FROM exercises e
+        WHERE e.workoutId = :workoutId AND e.name = :exerciseName
+    )
+""")
+    suspend fun deleteSetsForExerciseInWorkout(
+        exerciseName: String,
+        workoutId: Long
+    )
 
 }

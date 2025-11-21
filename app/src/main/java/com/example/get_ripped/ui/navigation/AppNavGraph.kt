@@ -8,6 +8,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import android.net.Uri
+import com.example.get_ripped.ui.exercisehistory.ExerciseHistoryScreen
 import com.example.get_ripped.data.repo.WorkoutRepository
 import com.example.get_ripped.ui.home.HomeScreen
 import com.example.get_ripped.ui.home.HomeViewModel
@@ -18,6 +20,7 @@ import com.example.get_ripped.ui.exercisepicker.ExercisePickerScreen
 private const val ROUTE_HOME = "home"
 private const val ROUTE_WORKOUT = "workout/{id}"
 private const val ROUTE_EXERCISE = "exercise/{workoutId}/{exerciseId}"
+private const val ROUTE_EXERCISE_HISTORY = "exerciseHistory/{exerciseName}"
 
 @Composable
 fun AppNavGraph(
@@ -76,7 +79,11 @@ fun AppNavGraph(
                 workoutId = workoutId,
                 exerciseId = exerciseId,
                 repo = repo,
-                onBack = { nav.popBackStack() }
+                onBack = { nav.popBackStack() },
+                onViewHistory = { exerciseName ->
+                    val encoded = Uri.encode(exerciseName)
+                    nav.navigate("exerciseHistory/$encoded")
+                }
             )
         }
 
@@ -91,6 +98,23 @@ fun AppNavGraph(
 
             ExercisePickerScreen(
                 workoutId = workoutId,
+                repo = repo,
+                onBack = { nav.popBackStack() }
+            )
+        }
+
+        // EXERCISE HISTORY
+        composable(
+            route = ROUTE_EXERCISE_HISTORY,
+            arguments = listOf(
+                navArgument("exerciseName") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val encodedName = backStackEntry.arguments?.getString("exerciseName") ?: ""
+            val exerciseName = Uri.decode(encodedName)
+
+            ExerciseHistoryScreen(
+                exerciseName = exerciseName,
                 repo = repo,
                 onBack = { nav.popBackStack() }
             )
